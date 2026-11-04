@@ -39,14 +39,14 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 
 ## What it handles
 
-- Files tested on 2016, 2020 and 2023: the folder inside the zip moves, headers change case, and offenses link by `offense_type_id` before 2023 and `offense_code` after.
+- Every year from 1997 to 2025 tested on real FBI files: the folder inside the zip moves, headers change case, the agency table is `cde_agencies.csv` before 2016, and offenses link by `offense_type_id` before 2023 and `offense_code` after.
 - Dates: `09-AUG-16` becomes `2016-08-09`.
 - Codes are read from each zip's own tables, because a location id can mean a different place in another year.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
 
 ## Web page
 
-Live at https://ivanvia7.github.io/nibrs-tables/ with all 50 states and DC for 2023.
+Live at https://ivanvia7.github.io/nibrs-tables/ with all 50 states and DC for 2025.
 
 `web/` is a static page that filters a Parquet file in the browser with DuckDB. To run it locally with other states:
 

@@ -5,7 +5,23 @@ import pytest
 
 from nibrs_tables import main
 
-# Two tiny zips, one per FBI layout. Values copy real Delaware rows.
+# Tiny zips, one per FBI layout. Values copy real Delaware rows.
+TABLES_2015 = {
+    "cde_agencies": "agency_id,ori,agency_name,primary_county,state_abbr\n"
+    "2247,DE0010100,Dover,Kent,DE\n",
+    "nibrs_location_type": "location_id,location_code,location_name\n"
+    "18,18,Parking/Drop Lot/Garage\n",
+    "nibrs_incident": "agency_id,incident_id,incident_date,incident_hour\n"
+    "2247,83088265,2015-08-09 00:00:00,0\n",
+    "nibrs_offense_type": "offense_type_id,offense_code,offense_name,crime_against,"
+    "offense_category_name\n"
+    "39,290,Destruction/Damage/Vandalism of Property,Property,"
+    "Destruction/Damage/Vandalism of Property\n",
+    "nibrs_offense": "offense_id,incident_id,offense_type_id,attempt_complete_flag,"
+    "location_id\n"
+    "90702150,83088265,39,C,18\n",
+}
+
 TABLES_2016 = {
     "agencies": '"AGENCY_ID","ORI","PUB_AGENCY_NAME","COUNTY_NAME","STATE_ABBR"\n'
     '"2254","DE0010800","Frederica","KENT","DE"\n',
@@ -43,6 +59,16 @@ def build_zip(path: Path, folder: str, tables: dict[str, str]) -> Path:
     with zipfile.ZipFile(path, "w") as archive:
         for table, text in tables.items():
             archive.writestr(f"{folder}/{table}.csv", text)
+    return path
+
+
+@pytest.fixture
+def zip_2015(tmp_path):
+    """Before 2016: no folder, cde_agencies table, no data_year, dates with a time."""
+    path = tmp_path / "DE-2015.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        for table, text in TABLES_2015.items():
+            archive.writestr(f"{table}.csv", text)
     return path
 
 

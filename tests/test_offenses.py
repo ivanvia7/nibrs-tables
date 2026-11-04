@@ -8,6 +8,18 @@ from nibrs_tables.schema import Offense
 def test_iso_date_reads_both_layouts():
     assert iso_date("09-AUG-16") == "2016-08-09"
     assert iso_date("2023-01-01") == "2023-01-01"
+    assert iso_date("2015-08-09 00:00:00") == "2015-08-09"
+
+
+def test_pre_2016_layout_reads_cde_agencies(zip_2015):
+    (offense,) = offenses(zip_2015)
+    assert (offense.year, offense.incident_date) == (2015, "2015-08-09")
+    assert (offense.agency_name, offense.county, offense.state) == (
+        "Dover",
+        "KENT",
+        "DE",
+    )
+    assert offense.location == "Parking/Drop Lot/Garage"
 
 
 def test_2016_layout_joins_by_offense_type_id(zip_2016):
