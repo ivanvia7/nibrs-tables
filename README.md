@@ -46,7 +46,7 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 
 ## Web page
 
-Live at https://ivanvia7.github.io/nibrs-tables/ with Delaware 2016 and 2023 and Texas 2023.
+Live at https://ivanvia7.github.io/nibrs-tables/ with all 50 states and DC for 2023.
 
 `web/` is a static page that filters a Parquet file in the browser with DuckDB. To run it locally with other states:
 
