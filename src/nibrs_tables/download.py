@@ -1,4 +1,5 @@
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -6,11 +7,22 @@ import httpx
 
 SIGNED_URL_API = "https://cde.ucr.cjis.gov/LATEST/s3/signedurl"
 CACHE_DIR = Path("cache")
+ATTEMPTS = 4
+RETRY_WAIT_S = 10  # grows 10, 20, 30 s; the FBI API drops connections under load
+
+
+def get_with_retries(url: str, params: dict[str, str]) -> httpx.Response:
+    for attempt in range(1, ATTEMPTS):
+        try:
+            return httpx.get(url, params=params, timeout=30)
+        except httpx.TransportError:
+            time.sleep(RETRY_WAIT_S * attempt)
+    return httpx.get(url, params=params, timeout=30)  # last try raises to the caller
 
 
 def signed_url(state: str, year: int) -> str:
     key = f"nibrs/incident/{year}/{state}-{year}.zip"
-    response = httpx.get(SIGNED_URL_API, params={"key": key}, timeout=30)
+    response = get_with_retries(SIGNED_URL_API, params={"key": key})
     response.raise_for_status()
 
     urls = response.json()

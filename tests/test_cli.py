@@ -29,7 +29,8 @@ def test_command_is_required(run_cli):
 
 
 @respx.mock
-def test_network_error_exits_without_traceback(run_cli, tmp_path):
+def test_network_error_exits_without_traceback(run_cli, tmp_path, monkeypatch):
+    monkeypatch.setattr("nibrs_tables.download.RETRY_WAIT_S", 0)
     respx.get(SIGNED_URL_API).mock(side_effect=httpx.ConnectError("offline"))
     code, _, _ = run_cli("download", "DE", "2023", "--cache-dir", str(tmp_path))
     assert code == "offline"

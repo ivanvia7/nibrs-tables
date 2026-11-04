@@ -50,3 +50,17 @@ def test_failed_download_leaves_no_part_file(tmp_path):
     with pytest.raises(httpx.HTTPStatusError):
         download_zip("DE", 2023, tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+@respx.mock
+def test_api_timeout_is_retried(tmp_path, monkeypatch):
+    monkeypatch.setattr("nibrs_tables.download.RETRY_WAIT_S", 0)
+    respx.get(SIGNED_URL_API).mock(
+        side_effect=[
+            httpx.ConnectTimeout("slow"),
+            httpx.Response(200, json={KEY: SIGNED}),
+        ]
+    )
+    respx.get(SIGNED).mock(return_value=httpx.Response(200, content=ZIP_BYTES))
+
+    assert download_zip("DE", 2023, tmp_path).read_bytes() == ZIP_BYTES
