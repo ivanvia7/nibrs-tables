@@ -46,9 +46,9 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 
 ## Web page
 
-Live at https://ivanvia7.github.io/nibrs-tables/ with all 50 states and DC for 2025.
+Live at https://ivanvia7.github.io/nibrs-tables/ with every state and year the FBI publishes, 1997 to 2025. Older years cover fewer states, because states joined NIBRS over time.
 
-`web/` is a static page that filters a Parquet file in the browser with DuckDB. To run it locally with other states:
+`web/` is a static page that filters a Parquet file in the browser with DuckDB. To run it locally:
 
 ```
 uv run --extra parquet python scripts/build_web_data.py DE-2023 TX-2023

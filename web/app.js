@@ -7,6 +7,7 @@ const SHOWN_COLUMNS = ["incident_date", "agency_name", "county", "offense_name",
 const $ = (id) => document.getElementById(id);
 let db;
 let conn;
+let files = [];  // files.json: one entry per state-year
 let current;  // the files.json entry on screen
 let queue = Promise.resolve();  // loads, filters and downloads run one at a time
 
@@ -128,7 +129,9 @@ async function downloadCsv() {
   const name = `${current.state}-${current.year}-offenses.csv`;
   let buffer;
   try {
-    await conn.query(`COPY (SELECT * FROM ${TABLE} ${where()}) TO ${sqlText(name)} (HEADER)`);
+    // The web files drop state and year to stay small; the CSV puts them back.
+    const columns = `${sqlText(current.state)} AS state, ${current.year} AS year, *`;
+    await conn.query(`COPY (SELECT ${columns} FROM ${TABLE} ${where()}) TO ${sqlText(name)} (HEADER)`);
     buffer = await db.copyFileToBuffer(name);
   } finally {
     await db.dropFile(name);
@@ -140,23 +143,44 @@ async function downloadCsv() {
   setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }
 
+// Years the picked state has, newest first; keeps the shown year when the state has it.
+function fillYears(year) {
+  const years = files.filter(({ state }) => state === $("state").value)
+    .map((entry) => entry.year).sort((a, b) => b - a);
+  $("year").replaceChildren(...years.map((y) => new Option(y, y)));
+  $("year").value = years.includes(year) ? year : years[0];
+}
+
+function pickFile() {
+  const entry = files.find(({ state, year }) =>
+    state === $("state").value && year === Number($("year").value));
+  run(() => loadFile(entry).catch((error) => {
+    // Put the menus back on the file still shown.
+    $("state").value = current.state;
+    fillYears(current.year);
+    throw error;
+  }));
+}
+
 async function main() {
   try {
     const [response] = await Promise.all([fetchOk("data/files.json"), startDuckDB()]);
-    const files = await response.json();
-    for (const entry of files) {
-      $("file").add(new Option(`${entry.state} ${entry.year}`, entry.file));
-    }
-    $("file").addEventListener("change", () => {
-      const entry = files.find(({ file }) => file === $("file").value);
-      run(() => loadFile(entry).catch((error) => {
-        $("file").value = current.file;  // keep the menu on the state still shown
-        throw error;
-      }));
+    files = await response.json();
+    const states = [...new Set(files.map(({ state }) => state))].sort();
+    $("state").replaceChildren(...states.map((state) => new Option(state, state)));
+    const newest = Math.max(...files.map(({ year }) => year));
+    const first = files.find(({ year }) => year === newest);
+    $("state").value = first.state;
+    fillYears(newest);
+
+    $("state").addEventListener("change", () => {
+      fillYears(current.year);
+      pickFile();
     });
+    $("year").addEventListener("change", pickFile);
     for (const key of Object.keys(FILTERS)) $(key).addEventListener("change", () => run(refresh));
     $("download").addEventListener("click", () => run(downloadCsv));
-    await run(() => loadFile(files[0]));
+    await run(() => loadFile(first));
   } catch (error) {
     setStatus(`Could not load data: ${error.message}`, true);
     throw error;

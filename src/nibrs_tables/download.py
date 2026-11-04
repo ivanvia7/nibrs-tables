@@ -11,6 +11,10 @@ ATTEMPTS = 4
 RETRY_WAIT_S = 10  # grows 10, 20, 30 s; the FBI API drops connections under load
 
 
+class NoFileError(ValueError):
+    """The FBI publishes no file for this state and year."""
+
+
 def get_with_retries(url: str, params: dict[str, str]) -> httpx.Response:
     for attempt in range(1, ATTEMPTS):
         try:
@@ -27,7 +31,7 @@ def signed_url(state: str, year: int) -> str:
 
     urls = response.json()
     if key not in urls:
-        raise ValueError(f"FBI has no NIBRS file for {state} {year}")
+        raise NoFileError(f"FBI has no NIBRS file for {state} {year}")
     return urls[key]
 
 

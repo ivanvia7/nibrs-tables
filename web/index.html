@@ -23,7 +23,7 @@ a { color: var(--link); text-decoration: none; } a:hover { text-decoration: unde
   border-bottom: 1px solid var(--layer2); display: flex; gap: 8px; align-items: baseline; }
 .card > h2 small { color: var(--helper); font-weight: 400; }
 .body { padding: 16px; }
-.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
 label { display: block; font-size: 12px; color: var(--text2); letter-spacing: .32px; }
 select { display: block; width: 100%; height: 40px; margin-top: 8px; padding: 0 16px;
   font: inherit; color: var(--text); background: var(--layer2); border: 0;
@@ -61,7 +61,8 @@ th { color: var(--text2); font-weight: 600; }
 <section class="card">
   <h2>Pick a state and year</h2>
   <div class="body grid">
-    <label>State and year <select id="file"></select></label>
+    <label>State <select id="state"></select></label>
+    <label>Year <select id="year"></select></label>
     <label>Offense <select id="offense"><option value="">All offenses</option></select></label>
     <label>County <select id="county"><option value="">All counties</option></select></label>
     <label>Agency <select id="agency"><option value="">All agencies</option></select></label>
