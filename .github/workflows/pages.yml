@@ -2,6 +2,8 @@ name: pages
 on:
   push:
     branches: [main]
+    # Workflow or code changes reach the page through the data run, which deploys after it ends.
+    paths: [web/**]
   workflow_run:
     workflows: [data]
     types: [completed]
@@ -27,8 +29,11 @@ jobs:
       # The data workflow keeps one release of built files per year.
       - run: |
           for tag in $(gh release list --limit 100 --json tagName -q '.[].tagName' | grep '^web-data-'); do
-            gh release download "$tag" --dir web/data --pattern '*.parquet' --clobber
+            # Years built before the tar change still have only loose files.
+            gh release download "$tag" --dir web/data --pattern '*.tar' --clobber \
+              || gh release download "$tag" --dir web/data --pattern '*.parquet' --clobber
           done
+      - run: for f in web/data/*.tar; do [ -e "$f" ] && tar -xf "$f" -C web/data && rm "$f"; done; true
       - run: uv run python scripts/build_web_data.py
       - run: du -sh web/data
       - uses: actions/upload-pages-artifact@v3

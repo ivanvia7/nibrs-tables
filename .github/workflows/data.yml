@@ -39,5 +39,7 @@ jobs:
       - run: |
           tag="web-data-$YEAR"
           gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --latest=false \
-            --title "Web page files $YEAR" --notes "Offense files the web page loads for $YEAR."
-          gh release upload "$tag" web/data/*.parquet --clobber
+            --title "Web page files $YEAR" --notes "Offense files the web page loads for $YEAR, in one tar."
+          # One file per year: 51 files a year made 1,500 API calls a run, over the 1,000 an hour limit.
+          tar -cf "web-data-$YEAR.tar" -C web/data $(cd web/data && ls *.parquet)
+          gh release upload "$tag" "web-data-$YEAR.tar" --clobber
