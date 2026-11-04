@@ -2,6 +2,8 @@
 
 FBI NIBRS crime files as one flat table: one row per offense, with names in place of codes.
 
+![The web page: Travis County, Texas 2023, 15,198 offenses by type and location](docs/screenshot.png)
+
 The FBI publishes each state and year as a zip of about 40 CSV tables. An offense row says `13B` at location `35`; the names sit in other tables. This tool joins them for you.
 
 ```
