@@ -23,6 +23,7 @@ def test_csv_has_header_and_excel_mark(zip_2023, tmp_path):
         header, *rows = csv.reader(file)
     assert header == COLUMNS
     assert len(rows) == 2
+    assert rows[0][COLUMNS.index("attempted")] == "false"
 
 
 def test_sqlite_keeps_numbers_and_flags(zip_2016, tmp_path):

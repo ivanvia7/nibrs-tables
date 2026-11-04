@@ -3,6 +3,7 @@ import json
 import sqlite3
 import tempfile
 from collections.abc import Iterator
+from contextlib import closing
 from dataclasses import astuple, fields
 from pathlib import Path
 
@@ -20,7 +21,10 @@ def to_csv(rows: Iterator[Offense], path: Path) -> int:
         writer = csv.writer(file)
         writer.writerow(COLUMNS)
         for row in rows:
-            writer.writerow(astuple(row))
+            # Lower-case true/false, as in the JSONL file and the web page CSV.
+            writer.writerow(
+                [str(v).lower() if isinstance(v, bool) else v for v in astuple(row)]
+            )
             count += 1
     return count
 
@@ -40,22 +44,20 @@ def to_sqlite(rows: Iterator[Offense], path: Path) -> int:
     columns = ", ".join(f"{column} {TYPES.get(column, 'TEXT')}" for column in COLUMNS)
     marks = ", ".join("?" for _ in COLUMNS)
     path.unlink(missing_ok=True)
-    out = sqlite3.connect(path)
-
-    with out:
+    # closing() shuts the file on errors too; "with out" only commits or rolls back.
+    with closing(sqlite3.connect(path)) as out, out:
         out.execute(f"CREATE TABLE offenses ({columns})")
-        count = out.executemany(
+        return out.executemany(
             f"INSERT INTO offenses VALUES ({marks})", (astuple(row) for row in rows)
         ).rowcount
-    out.close()
-    return count
 
 
 def to_parquet(rows: Iterator[Offense], path: Path) -> int:
     import duckdb  # only needed here; plain installs skip it
 
     columns = {column: TYPES.get(column, "VARCHAR") for column in COLUMNS}
-    with tempfile.TemporaryDirectory() as tmp:
+    # Stage beside the output: /tmp can be too small for a big state.
+    with tempfile.TemporaryDirectory(dir=path.parent) as tmp:
         staged = Path(tmp) / "rows.jsonl"
         count = to_jsonl(rows, staged)
         duckdb.sql(

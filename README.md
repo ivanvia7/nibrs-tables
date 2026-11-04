@@ -20,7 +20,7 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 ```
 
 `--out` writes `.csv`, `.jsonl`, `.db` (SQLite) or `.parquet` (needs the `parquet` extra: `pip install "nibrs-tables[parquet] @ git+https://github.com/ivanvia7/nibrs-tables"`).
-`nibrs-tables download DE 2023` saves only the FBI zip. Zips are kept in `cache/`, or the folder given with `--cache-dir`, so a second run skips the download.
+`nibrs-tables download DE 2023` saves only the FBI zip. Zips are kept in `cache/` inside the folder you run from, or in `--cache-dir`, so a second run skips the download.
 
 ## One row per offense
 

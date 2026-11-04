@@ -2,6 +2,8 @@ import argparse
 from importlib.util import find_spec
 from pathlib import Path
 
+import httpx
+
 from nibrs_tables.download import CACHE_DIR, download_zip
 from nibrs_tables.export import WRITERS, check_suffix, export
 from nibrs_tables.offenses import offenses
@@ -44,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
             return
 
         count = export(offenses(path), args.out)
-    except ValueError as error:
+    except (ValueError, httpx.HTTPError) as error:
         raise SystemExit(str(error)) from error
     print(f"{args.out} {count:,} rows")
 

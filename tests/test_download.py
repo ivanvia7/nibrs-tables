@@ -40,3 +40,13 @@ def test_broken_cached_zip_is_downloaded_again(tmp_path):
     (tmp_path / "DE-2023.zip").write_bytes(b"cut off")
 
     assert download_zip("DE", 2023, tmp_path).read_bytes() == ZIP_BYTES
+
+
+@respx.mock
+def test_failed_download_leaves_no_part_file(tmp_path):
+    respx.get(SIGNED_URL_API).mock(return_value=httpx.Response(200, json={KEY: SIGNED}))
+    respx.get(SIGNED).mock(return_value=httpx.Response(500))
+
+    with pytest.raises(httpx.HTTPStatusError):
+        download_zip("DE", 2023, tmp_path)
+    assert list(tmp_path.iterdir()) == []

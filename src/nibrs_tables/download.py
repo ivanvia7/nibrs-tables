@@ -30,11 +30,13 @@ def download_zip(state: str, year: int, cache_dir: Path) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     # Write to .part first, so a broken download never looks like a finished zip.
     partial = path.with_suffix(".part")
-    with httpx.stream("GET", url, timeout=120) as response:
-        response.raise_for_status()
-        with partial.open("wb") as file:
-            for chunk in response.iter_bytes():
-                file.write(chunk)
-
-    partial.replace(path)
+    try:
+        with httpx.stream("GET", url, timeout=120) as response:
+            response.raise_for_status()
+            with partial.open("wb") as file:
+                for chunk in response.iter_bytes():
+                    file.write(chunk)
+        partial.replace(path)
+    finally:
+        partial.unlink(missing_ok=True)  # a failed download leaves no big .part file
     return path

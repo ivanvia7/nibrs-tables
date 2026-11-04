@@ -33,7 +33,7 @@ function setStatus(text, isError = false) {
 }
 
 function run(task) {
-  queue = queue.then(task).catch((error) => setStatus(`Could not load data: ${error.message}`, true));
+  queue = queue.then(task).catch((error) => setStatus(`Error: ${error.message}`, true));
   return queue;
 }
 
@@ -59,7 +59,7 @@ async function loadFile(entry) {
   const response = await fetchOk(`data/${entry.file}`);
   const bytes = await response.arrayBuffer();
   await db.registerFileBuffer(entry.file, new Uint8Array(bytes));
-  await conn.query(`CREATE OR REPLACE TABLE ${TABLE} AS SELECT * FROM '${entry.file}'`);
+  await conn.query(`CREATE OR REPLACE TABLE ${TABLE} AS SELECT * FROM ${sqlText(entry.file)}`);
   await db.dropFile(entry.file);  // the table holds a copy; free the raw file
   current = entry;
 
@@ -128,7 +128,7 @@ async function downloadCsv() {
   const name = `${current.state}-${current.year}-offenses.csv`;
   let buffer;
   try {
-    await conn.query(`COPY (SELECT * FROM ${TABLE} ${where()}) TO '${name}' (HEADER)`);
+    await conn.query(`COPY (SELECT * FROM ${TABLE} ${where()}) TO ${sqlText(name)} (HEADER)`);
     buffer = await db.copyFileToBuffer(name);
   } finally {
     await db.dropFile(name);
@@ -149,7 +149,10 @@ async function main() {
     }
     $("file").addEventListener("change", () => {
       const entry = files.find(({ file }) => file === $("file").value);
-      run(() => loadFile(entry));
+      run(() => loadFile(entry).catch((error) => {
+        $("file").value = current.file;  // keep the menu on the state still shown
+        throw error;
+      }));
     });
     for (const key of Object.keys(FILTERS)) $(key).addEventListener("change", () => run(refresh));
     $("download").addEventListener("click", () => run(downloadCsv));
