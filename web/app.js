@@ -142,7 +142,7 @@ async function main() {
   try {
     const [files] = await Promise.all([fetchJson("data/files.json"), startDuckDB()]);
     for (const entry of files) {
-      $("file").add(new Option(`${entry.state} ${entry.year} · ${entry.rows.toLocaleString()} offenses`, entry.file));
+      $("file").add(new Option(`${entry.state} ${entry.year}`, entry.file));
     }
     $("file").addEventListener("change", () => loadFile(files.find((entry) => entry.file === $("file").value)));
     for (const key of Object.keys(FILTERS)) $(key).addEventListener("change", refresh);
