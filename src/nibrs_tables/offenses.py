@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
+from nibrs_tables.download import NoFileError
 from nibrs_tables.read import read_table
 from nibrs_tables.schema import Offense
 
@@ -54,7 +55,8 @@ def incidents(zip_path: Path) -> tuple[str, dict[str, Incident]]:
     # Codes mean different things in different years, so each zip uses its own tables.
     agencies = agency_table(zip_path)
     if not agencies:
-        raise ValueError(f"{zip_path.name} has an empty agencies table")
+        # AK 2020 ships a zip with no agencies: the state sent the FBI nothing that year.
+        raise NoFileError(f"{zip_path.name} has an empty agencies table")
     state = next(iter(agencies.values()))["state_abbr"]  # one state per zip
 
     by_id = {}

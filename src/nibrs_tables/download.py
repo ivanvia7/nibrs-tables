@@ -12,7 +12,7 @@ RETRY_WAIT_S = 10  # grows 10, 20, 30 s; the FBI API drops connections under loa
 
 
 class NoFileError(ValueError):
-    """The FBI publishes no file for this state and year."""
+    """The FBI publishes no file, or an empty one, for this state and year."""
 
 
 def get_with_retries(url: str, params: dict[str, str]) -> httpx.Response:
