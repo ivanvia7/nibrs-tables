@@ -20,9 +20,17 @@ def lookup(zip_path: Path, table: str, key: str) -> dict[str, dict[str, str]]:
 def offenses(zip_path: Path) -> Iterator[Offense]:
     # Codes mean different things in different years, so each zip uses its own tables.
     agencies = lookup(zip_path, "agencies", "agency_id")
+    state = next(iter(agencies.values()))["state_abbr"]  # one state per zip
     locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
-    # ponytail: every incident sits in memory; fine for DE (51k), a big state may need a SQLite join.
-    incidents = lookup(zip_path, "NIBRS_incident", "incident_id")
+    # Keep only the 3 fields we use: TX 2023 has 1.5 million incidents.
+    incidents = {
+        row["incident_id"]: (
+            row["agency_id"],
+            row["incident_date"],
+            row["incident_hour"],
+        )
+        for row in read_table(zip_path, "NIBRS_incident")
+    }
 
     offense_types = list(read_table(zip_path, "NIBRS_OFFENSE_TYPE"))
     # 2016-2020 offenses point to offense_type_id, 2023 offenses to offense_code.
@@ -32,19 +40,20 @@ def offenses(zip_path: Path) -> Iterator[Offense]:
     types = {row[link]: row for row in offense_types}
 
     for row in read_table(zip_path, "NIBRS_OFFENSE"):
-        incident = incidents[row["incident_id"]]
-        agency = agencies[incident["agency_id"]]
+        agency_id, incident_date, incident_hour = incidents[row["incident_id"]]
+        # A few incidents point to agencies missing from the FBI table (45 in TX 2023).
+        agency = agencies.get(agency_id, {})
         offense_type = types[row[link]]
         yield Offense(
-            state=agency["state_abbr"],
+            state=state,
             year=int(row["data_year"]),
             incident_id=row["incident_id"],
             offense_id=row["offense_id"],
-            incident_date=iso_date(incident["incident_date"]),
-            incident_hour=incident["incident_hour"],
-            ori=agency["ori"],
-            agency_name=agency["pub_agency_name"],
-            county=agency["county_name"],
+            incident_date=iso_date(incident_date),
+            incident_hour=incident_hour,
+            ori=agency.get("ori", ""),
+            agency_name=agency.get("pub_agency_name", ""),
+            county=agency.get("county_name", ""),
             offense_code=offense_type["offense_code"],
             offense_name=offense_type["offense_name"],
             offense_category=offense_type["offense_category_name"],
