@@ -1,0 +1,38 @@
+[project]
+name = "nibrs-tables"
+version = "0.1.0"
+description = "FBI NIBRS crime files as flat, readable tables"
+readme = "README.md"
+authors = [
+    { name = "ivanvia7", email = "ivanvia76@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+nibrs-tables = "nibrs_tables:main"
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.11"
+# Editors read this too, so they find pytest and this package in .venv.
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "RUF", "PIE", "RET", "PTH", "PL", "N"]
+ignore = ["PLC0415", "E501", "PLR2004"]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.2.0",
+    "respx>=0.23.1",
+    "ruff>=0.17.3",
+]
