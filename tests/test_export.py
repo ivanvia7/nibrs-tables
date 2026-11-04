@@ -37,3 +37,17 @@ def test_sqlite_keeps_numbers_and_flags(zip_2016, tmp_path):
 def test_unknown_ending_is_refused(zip_2023, tmp_path):
     with pytest.raises(ValueError, match="--out must end with"):
         export(offenses(zip_2023), tmp_path / "out.txt")
+
+
+def test_failed_export_keeps_the_old_file(zip_2023, tmp_path):
+    path = tmp_path / "out.csv"
+    path.write_text("old")
+
+    def broken():
+        yield from offenses(zip_2023)
+        raise RuntimeError("cut")
+
+    with pytest.raises(RuntimeError):
+        export(broken(), path)
+    assert path.read_text() == "old"
+    assert list(tmp_path.glob(".*.part")) == []

@@ -73,8 +73,18 @@ def sql_text(path: Path) -> str:
 WRITERS = {".csv": to_csv, ".jsonl": to_jsonl, ".db": to_sqlite, ".parquet": to_parquet}
 
 
-def export(rows: Iterator[Offense], path: Path) -> int:
-    writer = WRITERS.get(path.suffix)
-    if writer is None:
+def check_suffix(path: Path) -> None:
+    if path.suffix not in WRITERS:
         raise ValueError(f"--out must end with one of {', '.join(WRITERS)}")
-    return writer(rows, path)
+
+
+def export(rows: Iterator[Offense], path: Path) -> int:
+    check_suffix(path)
+    # Write beside the target, then swap, so a failed run keeps the old file.
+    staged = path.with_name(f".{path.name}.part")
+    try:
+        count = WRITERS[path.suffix](rows, staged)
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
+    return count

@@ -2,8 +2,8 @@ import argparse
 from importlib.util import find_spec
 from pathlib import Path
 
-from nibrs_tables.download import download_zip
-from nibrs_tables.export import WRITERS, export
+from nibrs_tables.download import CACHE_DIR, download_zip
+from nibrs_tables.export import WRITERS, check_suffix, export
 from nibrs_tables.offenses import offenses
 
 
@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     state_year.add_argument("year", type=int, help="data year, like 2023")
     state_year.add_argument(
-        "--cache-dir", type=Path, default=Path("cache"), help="where zips are kept"
+        "--cache-dir", type=Path, default=CACHE_DIR, help="where zips are kept"
     )
 
     commands.add_parser(
@@ -53,7 +53,9 @@ def check_out(parser: argparse.ArgumentParser, out: Path) -> None:
     """Fail before any download, not after a long one."""
     if not out.parent.is_dir():
         parser.error(f"--out folder {out.parent} does not exist")
-    if out.suffix not in WRITERS:
-        parser.error(f"--out must end with one of {', '.join(WRITERS)}")
+    try:
+        check_suffix(out)
+    except ValueError as error:
+        parser.error(str(error))
     if out.suffix == ".parquet" and find_spec("duckdb") is None:
         parser.error('.parquet needs duckdb: pip install "nibrs-tables[parquet]"')

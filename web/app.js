@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 let db;
 let conn;
 let current;  // the files.json entry on screen
+let queue = Promise.resolve();  // loads, filters and downloads run one at a time
 
 async function startDuckDB() {
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
@@ -21,10 +22,8 @@ async function startDuckDB() {
   conn = await db.connect();
 }
 
-async function rows(sql, params = []) {
-  const statement = await conn.prepare(sql);
-  const result = await statement.query(...params);
-  await statement.close();
+async function rows(sql) {
+  const result = await conn.query(sql);
   return result.toArray().map((row) => row.toJSON());
 }
 
@@ -33,20 +32,35 @@ function setStatus(text, isError = false) {
   $("status").classList.toggle("error", isError);
 }
 
+function run(task) {
+  queue = queue.then(task).catch((error) => setStatus(`Could not load data: ${error.message}`, true));
+  return queue;
+}
+
+// COPY takes no parameters, so every query quotes filter values as SQL text.
+const sqlText = (value) => `'${value.replaceAll("'", "''")}'`;
+
 // One WHERE clause for every query; an empty filter means "all".
 function where() {
-  const keys = Object.keys(FILTERS);
-  const conditions = keys.map((key, index) => `($${index + 1} = '' OR ${FILTERS[key]} = $${index + 1})`);
-  return { sql: `WHERE ${conditions.join(" AND ")}`, params: keys.map((key) => $(key).value) };
+  const conditions = Object.keys(FILTERS).filter((key) => $(key).value)
+    .map((key) => `${FILTERS[key]} = ${sqlText($(key).value)}`);
+  return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+}
+
+async function fetchOk(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  return response;
 }
 
 async function loadFile(entry) {
   setStatus(`Loading ${entry.state} ${entry.year}…`);
   // Whole-file fetch works on any static server; range requests need server support.
-  const response = await fetch(`data/${entry.file}`);
+  const response = await fetchOk(`data/${entry.file}`);
   const bytes = await response.arrayBuffer();
   await db.registerFileBuffer(entry.file, new Uint8Array(bytes));
   await conn.query(`CREATE OR REPLACE TABLE ${TABLE} AS SELECT * FROM '${entry.file}'`);
+  await db.dropFile(entry.file);  // the table holds a copy; free the raw file
   current = entry;
 
   for (const [key, column] of Object.entries(FILTERS)) {
@@ -87,8 +101,7 @@ async function refresh() {
   const filter = where();
   const [totals] = await rows(
     `SELECT count(*)::INT AS n, count(DISTINCT incident_id)::INT AS incidents,
-            count(*) FILTER (WHERE attempted)::INT AS attempted FROM ${TABLE} ${filter.sql}`,
-    filter.params,
+            count(*) FILTER (WHERE attempted)::INT AS attempted FROM ${TABLE} ${filter}`,
   );
   $("count").firstChild.textContent = totals.n.toLocaleString();
   $("incidents").firstChild.textContent = totals.incidents.toLocaleString();
@@ -96,14 +109,13 @@ async function refresh() {
   $("download").disabled = totals.n === 0;
 
   const top = (column) => rows(
-    `SELECT ${column} AS name, count(*)::INT AS n FROM ${TABLE} ${filter.sql}
+    `SELECT ${column} AS name, count(*)::INT AS n FROM ${TABLE} ${filter}
      GROUP BY 1 ORDER BY 2 DESC LIMIT 8`,
-    filter.params,
   );
   bars($("top-offenses"), await top(FILTERS.offense));
   bars($("top-locations"), await top("location"));
   table($("rows"), await rows(
-    `SELECT * FROM ${TABLE} ${filter.sql} ORDER BY incident_date LIMIT 50`, filter.params,
+    `SELECT * FROM ${TABLE} ${filter} ORDER BY incident_date LIMIT 50`,
   ));
 
   const picked = Object.keys(FILTERS).flatMap((key) => ($(key).value ? [$(key).value] : []));
@@ -112,42 +124,36 @@ async function refresh() {
   setStatus(`${current.state} ${current.year}: ${current.rows.toLocaleString()} offenses loaded.`);
 }
 
-// COPY takes no parameters, so filter values are quoted as SQL text.
-const sqlText = (value) => `'${value.replaceAll("'", "''")}'`;
-
 async function downloadCsv() {
-  const keys = Object.keys(FILTERS);
-  const conditions = keys.filter((key) => $(key).value)
-    .map((key) => `${FILTERS[key]} = ${sqlText($(key).value)}`);
-  const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const name = `${current.state}-${current.year}-offenses.csv`;
-
-  await conn.query(`COPY (SELECT * FROM ${TABLE} ${whereSql}) TO '${name}' (HEADER)`);
-  const buffer = await db.copyFileToBuffer(name);
-  await db.dropFile(name);
-  const link = Object.assign(document.createElement("a"), {
-    href: URL.createObjectURL(new Blob([buffer], { type: "text/csv" })),
-    download: name,
-  });
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url);
-  return response.json();
+  let buffer;
+  try {
+    await conn.query(`COPY (SELECT * FROM ${TABLE} ${where()}) TO '${name}' (HEADER)`);
+    buffer = await db.copyFileToBuffer(name);
+  } finally {
+    await db.dropFile(name);
+  }
+  // The byte-order mark makes Excel read accented names as UTF-8.
+  const href = URL.createObjectURL(new Blob(["\ufeff", buffer], { type: "text/csv" }));
+  Object.assign(document.createElement("a"), { href, download: name }).click();
+  // Revoke later: some browsers start the download after click() returns.
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }
 
 async function main() {
   try {
-    const [files] = await Promise.all([fetchJson("data/files.json"), startDuckDB()]);
+    const [response] = await Promise.all([fetchOk("data/files.json"), startDuckDB()]);
+    const files = await response.json();
     for (const entry of files) {
       $("file").add(new Option(`${entry.state} ${entry.year}`, entry.file));
     }
-    $("file").addEventListener("change", () => loadFile(files.find((entry) => entry.file === $("file").value)));
-    for (const key of Object.keys(FILTERS)) $(key).addEventListener("change", refresh);
-    $("download").addEventListener("click", downloadCsv);
-    await loadFile(files[0]);
+    $("file").addEventListener("change", () => {
+      const entry = files.find(({ file }) => file === $("file").value);
+      run(() => loadFile(entry));
+    });
+    for (const key of Object.keys(FILTERS)) $(key).addEventListener("change", () => run(refresh));
+    $("download").addEventListener("click", () => run(downloadCsv));
+    await run(() => loadFile(files[0]));
   } catch (error) {
     setStatus(`Could not load data: ${error.message}`, true);
     throw error;

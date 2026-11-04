@@ -1,9 +1,11 @@
 import sys
+import zipfile
 from pathlib import Path
 
 import httpx
 
 SIGNED_URL_API = "https://cde.ucr.cjis.gov/LATEST/s3/signedurl"
+CACHE_DIR = Path("cache")
 
 
 def signed_url(state: str, year: int) -> str:
@@ -19,7 +21,8 @@ def signed_url(state: str, year: int) -> str:
 
 def download_zip(state: str, year: int, cache_dir: Path) -> Path:
     path = cache_dir / f"{state}-{year}.zip"
-    if path.exists():
+    # A broken cached zip is fetched again instead of failing on every run.
+    if zipfile.is_zipfile(path):
         return path
 
     url = signed_url(state, year)
@@ -33,5 +36,5 @@ def download_zip(state: str, year: int, cache_dir: Path) -> Path:
             for chunk in response.iter_bytes():
                 file.write(chunk)
 
-    partial.rename(path)
+    partial.replace(path)
     return path
