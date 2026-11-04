@@ -1,6 +1,6 @@
 # nibrs-tables
 
-FBI NIBRS crime files as one flat table: one row per offense, with names in place of codes.
+FBI NIBRS crime files as flat tables: offenses, victims, offenders, arrests and property, with names in place of codes.
 
 ![The web page: Travis County, Texas 2023, 15,198 offenses by type and location](docs/screenshot.png)
 
@@ -36,6 +36,21 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 | `offense_category`, `crime_against` | `Assault Offenses`, `Person` |
 | `attempted` | `false` |
 | `location` | `Residence/Home` |
+
+## Victims, offenders, arrests and property
+
+Four more commands write one table each. Every row carries `state`, `year`, `incident_id`, `incident_date` and the agency, so the tables join to offenses on `incident_id`.
+
+| Command | One row per | Main columns |
+|---|---|---|
+| `victims` | victim | `victim_type`, `age`, `sex`, `race`, `ethnicity`, `resident_status`, `offenses`, `injuries`, `relationships` |
+| `offenders` | offender | `age`, `sex`, `race`, `ethnicity` |
+| `arrestees` | arrest | `arrest_date`, `arrest_type`, `offense_name`, `age`, `sex`, `race`, `ethnicity` |
+| `property` | item | `loss_type`, `description`, `value` in dollars, `date_recovered` |
+
+A victim's `offenses`, `injuries` and `relationships` list every match, joined by `; `. Texas 2025 has 1,531,445 victims, 1,538,228 offenders, 355,998 arrests and 1,344,095 property items.
+
+Blank means the FBI file has no value: society as a victim has no age, and some states send no offender ethnicity.
 
 ## What it handles
 

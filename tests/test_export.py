@@ -3,8 +3,11 @@ import sqlite3
 
 import pytest
 
-from nibrs_tables.export import COLUMNS, export
+from nibrs_tables.export import columns, export
 from nibrs_tables.offenses import offenses
+from nibrs_tables.schema import Offense
+
+COLUMNS = columns(Offense)
 
 
 @pytest.mark.parametrize("suffix", [".csv", ".jsonl", ".db", ".parquet"])
