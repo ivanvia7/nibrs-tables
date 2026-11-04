@@ -15,12 +15,12 @@ That run took 29 seconds. Top Texas offenses in 2023: Simple Assault 249,745, Al
 ## Install
 
 ```
-pip install nibrs-tables
+pip install git+https://github.com/ivanvia7/nibrs-tables
 nibrs-tables offenses DE 2023 --out de-2023.csv
 ```
 
-`--out` writes `.csv`, `.jsonl`, `.db` (SQLite) or `.parquet` (needs `pip install "nibrs-tables[parquet]"`).
-`nibrs-tables download DE 2023` saves only the FBI zip. Zips are kept in `cache/`, so a second run skips the download.
+`--out` writes `.csv`, `.jsonl`, `.db` (SQLite) or `.parquet` (needs the `parquet` extra: `pip install "nibrs-tables[parquet] @ git+https://github.com/ivanvia7/nibrs-tables"`).
+`nibrs-tables download DE 2023` saves only the FBI zip. Zips are kept in `cache/`, or the folder given with `--cache-dir`, so a second run skips the download.
 
 ## One row per offense
 
@@ -37,7 +37,7 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 
 ## What it handles
 
-- Files from 2016 to 2023: the folder inside the zip moves, headers change case, and offenses link by `offense_type_id` before 2023 and `offense_code` after.
+- Files tested on 2016, 2020 and 2023: the folder inside the zip moves, headers change case, and offenses link by `offense_type_id` before 2023 and `offense_code` after.
 - Dates: `09-AUG-16` becomes `2016-08-09`.
 - Codes are read from each zip's own tables, because a location id can mean a different place in another year.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
