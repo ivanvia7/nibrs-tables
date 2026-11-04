@@ -7,7 +7,7 @@ from nibrs_tables.export import WRITERS, export
 from nibrs_tables.offenses import offenses
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="nibrs-tables", description="FBI NIBRS crime files as flat tables"
     )
@@ -33,7 +33,7 @@ def main() -> None:
         "--out", type=Path, required=True, help=f"file ending in {', '.join(WRITERS)}"
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.command == "offenses":
         check_out(parser, args.out)
 
