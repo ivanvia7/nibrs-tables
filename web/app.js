@@ -2,6 +2,9 @@ import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0
 
 const TABLE = "offenses";
 const FILTERS = { offense: "offense_name", county: "county", agency: "agency_name" };
+// An agency serving several counties carries a label like "HAYS, TRAVIS, WILLIAMSON"
+// (Austin police), so the county menu lists single counties and matches inside the label.
+const COUNTY_LIST = "string_split(county, ', ')";
 const SHOWN_COLUMNS = ["incident_date", "agency_name", "county", "offense_name", "location", "attempted"];
 
 const $ = (id) => document.getElementById(id);
@@ -44,7 +47,9 @@ const sqlText = (value) => `'${value.replaceAll("'", "''")}'`;
 // One WHERE clause for every query; an empty filter means "all".
 function where() {
   const conditions = Object.keys(FILTERS).filter((key) => $(key).value)
-    .map((key) => `${FILTERS[key]} = ${sqlText($(key).value)}`);
+    .map((key) => (key === "county"
+      ? `list_contains(${COUNTY_LIST}, ${sqlText($(key).value)})`
+      : `${FILTERS[key]} = ${sqlText($(key).value)}`));
   return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 }
 
@@ -65,8 +70,9 @@ async function loadFile(entry) {
   current = entry;
 
   for (const [key, column] of Object.entries(FILTERS)) {
+    const pick = key === "county" ? `unnest(${COUNTY_LIST})` : column;
     const values = await rows(
-      `SELECT DISTINCT ${column} AS value FROM ${TABLE} WHERE ${column} <> '' ORDER BY 1`,
+      `SELECT DISTINCT ${pick} AS value FROM ${TABLE} WHERE ${column} <> '' ORDER BY 1`,
     );
     const select = $(key);
     select.length = 1;  // keep the "All" option
@@ -145,8 +151,8 @@ async function downloadCsv() {
 
 // Years the picked state has, newest first; keeps the shown year when the state has it.
 function fillYears(year) {
-  const years = files.filter(({ state }) => state === $("state").value)
-    .map((entry) => entry.year).sort((a, b) => b - a);
+  const stateFiles = files.filter(({ state }) => state === $("state").value);
+  const years = stateFiles.map((entry) => entry.year).sort((a, b) => b - a);
   $("year").replaceChildren(...years.map((y) => new Option(y, y)));
   $("year").value = years.includes(year) ? year : years[0];
 }

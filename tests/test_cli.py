@@ -34,3 +34,15 @@ def test_network_error_exits_without_traceback(run_cli, tmp_path, monkeypatch):
     respx.get(SIGNED_URL_API).mock(side_effect=httpx.ConnectError("offline"))
     code, _, _ = run_cli("download", "DE", "2023", "--cache-dir", str(tmp_path))
     assert code == "offline"
+
+
+def test_parquet_without_duckdb_gives_an_install_line_that_works(
+    run_cli, tmp_path, monkeypatch
+):
+    monkeypatch.setattr("nibrs_tables.find_spec", lambda _: None)
+    code, _, stderr = run_cli(
+        "offenses", "DE", "2023", "--cache-dir", str(tmp_path), "--out", "x.parquet"
+    )
+    assert code == 2
+    # The package is not on PyPI, so the hint must install from GitHub.
+    assert "git+https://github.com/ivanvia7/nibrs-tables" in stderr

@@ -24,6 +24,7 @@ class Offense:
     offense_category: str
     crime_against: str
     attempted: bool
+    location_code: str  # FBI code, like 20; names change between years, codes do not
     location: str
 
 

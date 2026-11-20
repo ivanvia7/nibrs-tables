@@ -1,4 +1,5 @@
-from collections.abc import Iterator
+import sys
+from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -50,6 +51,22 @@ def agency_table(zip_path: Path) -> dict[str, dict[str, str]]:
         }
 
 
+def agency_label(agency: dict[str, str]) -> str:
+    """The FBI name plus its unit, so "University of Texas:" campuses stay apart.
+
+    A county sheriff shares its name with the city (Austin police and Austin County
+    sheriff are both "Austin"), so county agencies get " County" added.
+    """
+    name = agency.get("pub_agency_name", "").strip()
+    unit = agency.get("pub_agency_unit", "").strip()
+    if unit:
+        return f"{name} {unit}"
+    # "New Castle County Police Department" already says County.
+    if agency.get("agency_type_name") == "County" and "County" not in name.split():
+        return f"{name} County"
+    return name
+
+
 def incidents(zip_path: Path) -> tuple[str, dict[str, Incident]]:
     """The zip's state, and every incident by id with its date and agency."""
     # Codes mean different things in different years, so each zip uses its own tables.
@@ -67,7 +84,7 @@ def incidents(zip_path: Path) -> tuple[str, dict[str, Incident]]:
             date=iso_date(row["incident_date"]),
             hour=row["incident_hour"],
             ori=agency.get("ori", ""),
-            agency_name=agency.get("pub_agency_name", ""),
+            agency_name=agency_label(agency),
             county=agency.get("county_name", ""),
         )
     return state, by_id
@@ -83,34 +100,72 @@ def offense_types(zip_path: Path) -> tuple[str, dict[str, dict[str, str]]]:
     return link, {row[link]: row for row in rows}
 
 
-def offenses(zip_path: Path) -> Iterator[Offense]:
-    state, by_id = incidents(zip_path)
-    locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
-    link, types = offense_types(zip_path)
-
-    for row in read_table(zip_path, "NIBRS_OFFENSE"):
-        try:
+def offenses(zip_path: Path) -> Generator[Offense]:
+    # One bad row must not stop a 1.6 million row file: skip it and say how many.
+    skipped = 0
+    written = 0
+    first_skip = ""
+    skips_in_error = False  # the all-skipped error already names the first skip
+    try:
+        state, by_id = incidents(zip_path)
+        locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
+        link, types = offense_types(zip_path)
+        for row in read_table(zip_path, "NIBRS_OFFENSE"):
+            # .get on the lookups, so a KeyError below can only be a missing column.
+            ids = {
+                "incident_id": by_id.get(row["incident_id"]),
+                link: types.get(row[link]),
+                "location_id": locations.get(row["location_id"]),
+            }
+            missing = [column for column, found in ids.items() if found is None]
+            if missing:
+                skipped += 1
+                column = missing[0]
+                first_skip = first_skip or (
+                    f"offense {row['offense_id']} points to missing {column} {row[column]!r}"
+                )
+                continue
             incident = by_id[row["incident_id"]]
             offense_type = types[row[link]]
-            location = locations[row["location_id"]]["location_name"]
-        except KeyError as error:
+            written += 1
+            yield Offense(
+                state=state,
+                year=row_year(row, incident.date),
+                incident_id=row["incident_id"],
+                offense_id=row["offense_id"],
+                incident_date=incident.date,
+                incident_hour=incident.hour,
+                ori=incident.ori,
+                agency_name=incident.agency_name,
+                county=incident.county,
+                offense_code=offense_type["offense_code"],
+                offense_name=offense_type["offense_name"],
+                offense_category=offense_type["offense_category_name"],
+                crime_against=offense_type["crime_against"],
+                attempted=row["attempt_complete_flag"] == "A",
+                location_code=locations[row["location_id"]]["location_code"],
+                location=locations[row["location_id"]]["location_name"],
+            )
+        # Zero rows is never a real state-year: the CLI fails and keeps the old output.
+        if not written and skipped:
+            # Every row dangling means the FBI changed its codes.
+            skips_in_error = True
             raise ValueError(
-                f"{zip_path.name}: offense {row['offense_id']} points to missing id {error}"
-            ) from error
-        yield Offense(
-            state=state,
-            year=row_year(row, incident.date),
-            incident_id=row["incident_id"],
-            offense_id=row["offense_id"],
-            incident_date=incident.date,
-            incident_hour=incident.hour,
-            ori=incident.ori,
-            agency_name=incident.agency_name,
-            county=incident.county,
-            offense_code=offense_type["offense_code"],
-            offense_name=offense_type["offense_name"],
-            offense_category=offense_type["offense_category_name"],
-            crime_against=offense_type["crime_against"],
-            attempted=row["attempt_complete_flag"] == "A",
-            location=location,
-        )
+                f"{zip_path.name}: every offense points to a missing id, first: {first_skip}"
+            )
+        if not written:
+            # Like an empty agencies table: no data, so the web build leaves the
+            # state-year out of that year's files, as it does for a missing file.
+            raise NoFileError(f"{zip_path.name} has no offenses")
+    except KeyError as error:
+        # An FBI layout change must fail loudly, not turn every row into a skip.
+        raise ValueError(
+            f"{zip_path.name}: a table read for offenses has no column {error}"
+        ) from error
+    finally:
+        # Also runs on an early stop or a broken read, so skipped rows are never silent.
+        if skipped and not skips_in_error:
+            print(
+                f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
+                file=sys.stderr,
+            )

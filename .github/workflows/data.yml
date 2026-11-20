@@ -5,7 +5,7 @@ name: data
 on:
   push:
     branches: [main]
-    paths: [src/**, scripts/build_web_data.py, .github/workflows/data.yml]
+    paths: [src/**, scripts/build_web_data.py, scripts/check_sample.py, .github/workflows/data.yml]
   workflow_dispatch:
 
 permissions:
@@ -36,6 +36,9 @@ jobs:
           path: cache
           key: nibrs-zips-${{ matrix.year }}
       - run: uv run python scripts/build_web_data.py $(for s in $STATES; do echo "$s-$YEAR"; done)
+      # Same cached zips, decoded a second way; a wrong code, name, location or ori,
+      # or a lost row, fails the year before its upload.
+      - run: uv run python scripts/check_sample.py $(for s in $STATES; do echo "$s-$YEAR"; done)
       - run: |
           tag="web-data-$YEAR"
           gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --latest=false \
