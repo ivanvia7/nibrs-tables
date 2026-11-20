@@ -87,6 +87,7 @@ def offense_types(zip_path: Path) -> tuple[str, dict[str, dict[str, str]]]:
 def offenses(zip_path: Path) -> Generator[Offense]:
     # One bad row must not stop a 1.6 million row file: skip it and say how many.
     skipped = 0
+    written = 0
     first_skip = ""
     try:
         state, by_id = incidents(zip_path)
@@ -109,6 +110,7 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 continue
             incident = by_id[row["incident_id"]]
             offense_type = types[row[link]]
+            written += 1
             yield Offense(
                 state=state,
                 year=row_year(row, incident.date),
@@ -125,6 +127,11 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 crime_against=offense_type["crime_against"],
                 attempted=row["attempt_complete_flag"] == "A",
                 location=locations[row["location_id"]]["location_name"],
+            )
+        if skipped and not written:
+            # Every row dangling means the FBI changed its codes; keep the old output.
+            raise ValueError(
+                f"{zip_path.name}: every offense points to a missing id, first: {first_skip}"
             )
     except KeyError as error:
         # An FBI layout change must fail loudly, not turn every row into a skip.

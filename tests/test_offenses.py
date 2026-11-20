@@ -145,3 +145,18 @@ def test_missing_key_column_in_a_setup_table_fails_loudly(tmp_path, table, colum
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
     with pytest.raises(ValueError, match=rf"DE-2023\.zip: .* has no column '{column}'"):
         list(offenses(path))
+
+
+def test_every_offense_dangling_fails_and_keeps_old_output(tmp_path, run_cli):
+    tables = {
+        **TABLES_2023,
+        "NIBRS_OFFENSE": TABLES_2023["NIBRS_OFFENSE"].replace(",13B,", ",X13B,"),
+    }
+    build_zip(tmp_path / "DE-2023.zip", "DE", tables)
+    out = tmp_path / "out.csv"
+    out.write_text("old\n")
+    code, _, _ = run_cli(
+        "offenses", "DE", "2023", "--cache-dir", str(tmp_path), "--out", str(out)
+    )
+    assert "every offense points to a missing id" in str(code)
+    assert out.read_text() == "old\n"
