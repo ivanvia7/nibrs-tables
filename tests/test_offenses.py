@@ -130,13 +130,18 @@ def test_missing_column_in_a_code_table_fails_loudly(tmp_path):
         list(offenses(path))
 
 
-def test_missing_key_column_in_a_code_table_fails_loudly(tmp_path):
-    tables = {
-        **TABLES_2023,
-        "NIBRS_LOCATION_TYPE": "loc_id,location_code,location_name\n35,20,Residence/Home\n",
-    }
+@pytest.mark.parametrize(
+    ("table", "column"),
+    [
+        ("agencies", "agency_id"),
+        ("NIBRS_incident", "incident_hour"),
+        ("NIBRS_LOCATION_TYPE", "location_id"),
+        ("NIBRS_OFFENSE_TYPE", "offense_code"),
+    ],
+)
+def test_missing_key_column_in_a_setup_table_fails_loudly(tmp_path, table, column):
+    header, rest = TABLES_2023[table].split("\n", 1)
+    tables = {**TABLES_2023, table: header.replace(column, "renamed") + "\n" + rest}
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
-    with pytest.raises(
-        ValueError, match=r"DE-2023\.zip: .* has no column 'location_id'"
-    ):
+    with pytest.raises(ValueError, match=rf"DE-2023\.zip: .* has no column '{column}'"):
         list(offenses(path))
