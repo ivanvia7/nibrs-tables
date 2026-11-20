@@ -134,12 +134,15 @@ def main(names: list[str]) -> None:
     for name in names:
         state, year = name.upper().split("-")
         try:
-            result = check(download_zip(state, int(year), CACHE_DIR))
+            path = download_zip(state, int(year), CACHE_DIR)
+            result = check(path)
         except NoFileError as error:
             # Older years cover fewer states; the web build skips these too.
             print(f"{name}: skipped, {error}")
             continue
         except ValueError as error:
+            if not str(error).startswith(f"{state}-{year}.zip"):
+                raise  # a download or name error, not the tool refusing the zip
             # The tool refused the file, e.g. every offense points to a missing id;
             # report it and go on, so later state-years still get checked.
             print(f"{name}: tool failed, {error}")

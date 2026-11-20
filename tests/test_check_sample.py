@@ -89,8 +89,14 @@ def test_a_refused_file_fails_but_later_files_are_checked(
         ("MD", 2023): build_zip(tmp_path / "MD-2023.zip", "DE", TABLES_2023),
     }
     monkeypatch.setattr(check_sample, "download_zip", lambda s, y, _: zips[(s, y)])
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as stop:
         check_sample.main(["DE-2023", "MD-2023"])
+    assert stop.value.code == 1
     out = capsys.readouterr().out
     assert "DE-2023: tool failed" in out
     assert "MD-2023: 2 raw offenses, 0 with a missing id, 2 sampled, 0 problems" in out
+
+
+def test_a_bad_name_is_not_called_a_tool_failure():
+    with pytest.raises(ValueError, match="invalid literal"):
+        check_sample.main(["DE-20x3"])
