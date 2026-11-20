@@ -65,14 +65,19 @@ def test_unknown_agency_keeps_the_offense_with_blank_agency(zip_2023):
     assert second.offense_name == "Simple Assault"
 
 
-def test_dangling_offense_type_raises_clean_error(tmp_path):
+def test_dangling_offense_type_is_skipped_and_counted(tmp_path, capsys):
     tables = {
         **TABLES_2023,
         "NIBRS_OFFENSE": TABLES_2023["NIBRS_OFFENSE"] + "2023,22,1,99Z,C,35\n",
     }
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
-    with pytest.raises(ValueError, match="offense 22 points to missing id '99Z'"):
-        list(offenses(path))
+    good = list(offenses(build_zip(tmp_path / "good.zip", "DE", TABLES_2023)))
+    rows = list(offenses(path))
+    assert rows == good
+    assert (
+        "skipped 1 offenses with a missing id, first: offense 22 points to missing id '99Z'"
+        in (capsys.readouterr().err)
+    )
 
 
 def test_empty_agencies_raises_clean_error(tmp_path):

@@ -2,6 +2,8 @@
 
 FBI NIBRS crime files as flat tables: offenses, victims, offenders, arrests and property, with names in place of codes.
 
+For reporters, researchers and city analysts who want to count crimes by type, place or agency without joining FBI tables by hand.
+
 ![The web page: Travis County, Texas 2023, 15,198 offenses by type and location](docs/screenshot.png)
 
 The FBI publishes each state and year as a zip of about 40 CSV tables. An offense row says `13B` at location `35`; the names sit in other tables. This tool joins them for you.
@@ -12,7 +14,9 @@ Downloading TX-2023.zip
 tx-2023.parquet 1,643,107 rows
 ```
 
-That run took 29 seconds. Top Texas offenses in 2023: Simple Assault 249,745, All Other Larceny 173,999, Vandalism 167,598.
+That run took 47 seconds with the download and peaked at 1.6 GB of memory. Top Texas offenses in 2023: Simple Assault 249,745, All Other Larceny 173,999, Destruction/Damage/Vandalism of Property 167,598.
+
+The FBI download API drops connections under heavy parallel use; the tool retries 4 times, and a cached zip skips the download.
 
 ## Install
 
@@ -58,6 +62,7 @@ Blank means the FBI file has no value: society as a victim has no age, and some 
 - Dates: `09-AUG-16` becomes `2016-08-09`.
 - Codes are read from each zip's own tables, because a location id can mean a different place in another year.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
+- An offense that points to a missing incident, offense type or location is skipped, and the run prints how many.
 
 ## Web page
 

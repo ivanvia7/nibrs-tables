@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -88,15 +89,21 @@ def offenses(zip_path: Path) -> Iterator[Offense]:
     locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
     link, types = offense_types(zip_path)
 
+    # One bad row must not stop a 1.6 million row file: skip it and say how many.
+    skipped = 0
+    first_skip = ""
     for row in read_table(zip_path, "NIBRS_OFFENSE"):
         try:
             incident = by_id[row["incident_id"]]
             offense_type = types[row[link]]
             location = locations[row["location_id"]]["location_name"]
         except KeyError as error:
-            raise ValueError(
-                f"{zip_path.name}: offense {row['offense_id']} points to missing id {error}"
-            ) from error
+            skipped += 1
+            first_skip = (
+                first_skip
+                or f"offense {row['offense_id']} points to missing id {error}"
+            )
+            continue
         yield Offense(
             state=state,
             year=row_year(row, incident.date),
@@ -113,4 +120,9 @@ def offenses(zip_path: Path) -> Iterator[Offense]:
             crime_against=offense_type["crime_against"],
             attempted=row["attempt_complete_flag"] == "A",
             location=location,
+        )
+    if skipped:
+        print(
+            f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
+            file=sys.stderr,
         )

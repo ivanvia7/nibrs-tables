@@ -74,4 +74,8 @@ def check_out(parser: argparse.ArgumentParser, out: Path) -> None:
     except ValueError as error:
         parser.error(str(error))
     if out.suffix == ".parquet" and find_spec("duckdb") is None:
-        parser.error('.parquet needs duckdb: pip install "nibrs-tables[parquet]"')
+        # Not on PyPI, so the hint installs from GitHub like the README.
+        parser.error(
+            '.parquet needs duckdb: pip install "nibrs-tables[parquet] @ '
+            'git+https://github.com/ivanvia7/nibrs-tables"'
+        )
