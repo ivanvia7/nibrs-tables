@@ -128,11 +128,14 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 attempted=row["attempt_complete_flag"] == "A",
                 location=locations[row["location_id"]]["location_name"],
             )
-        if skipped and not written:
-            # Every row dangling means the FBI changed its codes; keep the old output.
+        # Zero rows is never a real state-year, so fail and keep the old output.
+        if not written and skipped:
+            # Every row dangling means the FBI changed its codes.
             raise ValueError(
                 f"{zip_path.name}: every offense points to a missing id, first: {first_skip}"
             )
+        if not written:
+            raise ValueError(f"{zip_path.name} has no offenses")
     except KeyError as error:
         # An FBI layout change must fail loudly, not turn every row into a skip.
         raise ValueError(
@@ -140,7 +143,8 @@ def offenses(zip_path: Path) -> Generator[Offense]:
         ) from error
     finally:
         # Also runs when the writer stops early, so skipped rows are never silent.
-        if skipped:
+        # When nothing was written the error above already names the first skip.
+        if skipped and written:
             print(
                 f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
                 file=sys.stderr,

@@ -155,8 +155,21 @@ def test_every_offense_dangling_fails_and_keeps_old_output(tmp_path, run_cli):
     build_zip(tmp_path / "DE-2023.zip", "DE", tables)
     out = tmp_path / "out.csv"
     out.write_text("old\n")
-    code, _, _ = run_cli(
+    code, _, stderr = run_cli(
         "offenses", "DE", "2023", "--cache-dir", str(tmp_path), "--out", str(out)
     )
     assert "every offense points to a missing id" in str(code)
+    assert "skipped" not in stderr  # the first skip is named once, in the error
+    assert out.read_text() == "old\n"
+
+
+def test_empty_offense_table_fails_and_keeps_old_output(tmp_path, run_cli):
+    header = TABLES_2023["NIBRS_OFFENSE"].split("\n", 1)[0] + "\n"
+    build_zip(tmp_path / "DE-2023.zip", "DE", {**TABLES_2023, "NIBRS_OFFENSE": header})
+    out = tmp_path / "out.csv"
+    out.write_text("old\n")
+    code, _, _ = run_cli(
+        "offenses", "DE", "2023", "--cache-dir", str(tmp_path), "--out", str(out)
+    )
+    assert code == "DE-2023.zip has no offenses"
     assert out.read_text() == "old\n"

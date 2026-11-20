@@ -62,7 +62,7 @@ Blank means the FBI file has no value: society as a victim has no age, and some 
 - Dates: `09-AUG-16` becomes `2016-08-09`.
 - Codes are read from each zip's own tables, because a location id can mean a different place in another year.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
-- An offense that points to a missing incident, offense type or location is skipped, and the run prints how many.
+- An offense that points to a missing incident, offense type or location is skipped, and the run prints how many. If every offense is skipped, or the table has none, the run fails and keeps the old output file.
 
 ## Web page
 
