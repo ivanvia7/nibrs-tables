@@ -85,14 +85,13 @@ def offense_types(zip_path: Path) -> tuple[str, dict[str, dict[str, str]]]:
 
 
 def offenses(zip_path: Path) -> Generator[Offense]:
-    state, by_id = incidents(zip_path)
-    locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
-    link, types = offense_types(zip_path)
-
     # One bad row must not stop a 1.6 million row file: skip it and say how many.
     skipped = 0
     first_skip = ""
     try:
+        state, by_id = incidents(zip_path)
+        locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
+        link, types = offense_types(zip_path)
         for row in read_table(zip_path, "NIBRS_OFFENSE"):
             # .get on the lookups, so a KeyError below can only be a missing column.
             ids = {

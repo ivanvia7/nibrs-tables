@@ -128,3 +128,15 @@ def test_missing_column_in_a_code_table_fails_loudly(tmp_path):
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
     with pytest.raises(ValueError, match="has no column 'location_name'"):
         list(offenses(path))
+
+
+def test_missing_key_column_in_a_code_table_fails_loudly(tmp_path):
+    tables = {
+        **TABLES_2023,
+        "NIBRS_LOCATION_TYPE": "loc_id,location_code,location_name\n35,20,Residence/Home\n",
+    }
+    path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
+    with pytest.raises(
+        ValueError, match=r"DE-2023\.zip: .* has no column 'location_id'"
+    ):
+        list(offenses(path))
