@@ -4,7 +4,7 @@ FBI NIBRS crime files as flat tables: offenses, victims, offenders, arrests and 
 
 For reporters, researchers and city analysts who want to count crimes by type, place or agency without joining FBI tables by hand.
 
-![The web page: Travis County, Texas 2023, 15,198 offenses by type and location](docs/screenshot.png)
+![The web page: Travis County, Texas 2023, 97,737 offenses by type and location](docs/screenshot.png)
 
 The FBI publishes each state and year as a zip of about 40 CSV tables. An offense row says `13B` at location `35`; the names sit in other tables. This tool joins them for you.
 
@@ -39,7 +39,7 @@ nibrs-tables offenses DE 2023 --out de-2023.csv
 | `offense_code`, `offense_name` | `13B`, `Simple Assault` |
 | `offense_category`, `crime_against` | `Assault Offenses`, `Person` |
 | `attempted` | `false` |
-| `location` | `Residence/Home` |
+| `location_code`, `location` | `20`, `Residence/Home` |
 
 ## Victims, offenders, arrests and property
 
@@ -61,12 +61,30 @@ Blank means the FBI file has no value: society as a victim has no age, and some 
 - Every year from 1997 to 2025 tested on real FBI files: the folder inside the zip moves, headers change case, the agency table is `cde_agencies.csv` before 2016, and offenses link by `offense_type_id` before 2023 and `offense_code` after.
 - Dates: `09-AUG-16` becomes `2016-08-09`.
 - Codes are read from each zip's own tables, because a location id can mean a different place in another year.
+- Names follow each year's FBI table, so some change over time: location `13` is `Highway/Road/Ally` in 2005 and `Highway/Road/Alley/Street/Sidewalk` in 2023. Group stacked years by `offense_code` and `location_code`.
+- `agency_name` adds the FBI unit, so campuses stay apart (`University of Texas: Austin`), and county agencies end in `County`, so Austin police (`Austin`) and the Austin County sheriff (`Austin County`) do too.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
 - An offense that points to a missing incident, offense type or location is skipped, and the run prints how many. If every offense is skipped, or the table has none, the run fails and keeps the old output file.
+
+## Checked against the FBI files
+
+`scripts/check_sample.py` decodes offenses a second way, with plain `csv` and the zip's own code tables, and compares that to the tool. It runs on every state and year the web page builds.
+
+```
+$ uv run python scripts/check_sample.py DE-2005 DE-2016 DE-2023 TX-2023
+DE-2005: 89,182 raw offenses, 20 sampled, 0 problems
+DE-2016: 79,533 raw offenses, 20 sampled, 0 problems
+DE-2023: 62,938 raw offenses, 20 sampled, 0 problems
+TX-2023: 1,643,107 raw offenses, 20 sampled, 0 problems
+```
+
+Every raw offense row comes out exactly once, and each sampled row matches on code, name, category, location and the attempted flag.
 
 ## Web page
 
 Live at https://ivanvia7.github.io/nibrs-tables/ with every state and year the FBI publishes, 1997 to 2025. Older years cover fewer states, because states joined NIBRS over time.
+
+Picking a county includes agencies that cover it along with others: TRAVIS includes Austin police, filed by the FBI under `HAYS, TRAVIS, WILLIAMSON`.
 
 `web/` is a static page that filters a Parquet file in the browser with DuckDB. To run it locally:
 
