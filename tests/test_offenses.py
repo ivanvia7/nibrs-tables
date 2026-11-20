@@ -104,7 +104,9 @@ def test_missing_column_fails_loudly(tmp_path):
         "attempt_complete_flag\n2023,20,1,13B,C\n",
     }
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
-    with pytest.raises(ValueError, match="offense table has no column 'location_id'"):
+    with pytest.raises(
+        ValueError, match="a table read for offenses has no column 'location_id'"
+    ):
         list(offenses(path))
 
 
@@ -115,4 +117,14 @@ def test_empty_agencies_raises_clean_error(tmp_path):
     }
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
     with pytest.raises(ValueError, match="empty agencies table"):
+        list(offenses(path))
+
+
+def test_missing_column_in_a_code_table_fails_loudly(tmp_path):
+    tables = {
+        **TABLES_2023,
+        "NIBRS_LOCATION_TYPE": "location_id,location_code,place\n35,20,Residence/Home\n",
+    }
+    path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
+    with pytest.raises(ValueError, match="has no column 'location_name'"):
         list(offenses(path))

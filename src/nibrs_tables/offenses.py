@@ -130,7 +130,7 @@ def offenses(zip_path: Path) -> Generator[Offense]:
     except KeyError as error:
         # An FBI layout change must fail loudly, not turn every row into a skip.
         raise ValueError(
-            f"{zip_path.name}: offense table has no column {error}"
+            f"{zip_path.name}: a table read for offenses has no column {error}"
         ) from error
     finally:
         # Also runs when the writer stops early, so skipped rows are never silent.
