@@ -2,6 +2,7 @@ import dataclasses
 import importlib.util
 from pathlib import Path
 
+import pytest
 from conftest import TABLES_2023, build_zip
 
 from nibrs_tables.offenses import offenses
@@ -74,3 +75,22 @@ def test_many_dangling_rows_fail_and_sampling_skips_them(tmp_path):
     result = check_sample.check(build_zip(tmp_path / "DE-2023.zip", "DE", tables))
     assert result["sampled"] == 2  # both good rows, none of the 5 dangling ones
     assert result["problems"] == ["rows: 5 of 7 point to a missing id"]
+
+
+def test_a_refused_file_fails_but_later_files_are_checked(
+    tmp_path, monkeypatch, capsys
+):
+    bad = {
+        **TABLES_2023,
+        "NIBRS_OFFENSE": TABLES_2023["NIBRS_OFFENSE"].replace(",13B,", ",X13B,"),
+    }
+    zips = {
+        ("DE", 2023): build_zip(tmp_path / "DE-2023.zip", "DE", bad),
+        ("MD", 2023): build_zip(tmp_path / "MD-2023.zip", "DE", TABLES_2023),
+    }
+    monkeypatch.setattr(check_sample, "download_zip", lambda s, y, _: zips[(s, y)])
+    with pytest.raises(SystemExit):
+        check_sample.main(["DE-2023", "MD-2023"])
+    out = capsys.readouterr().out
+    assert "DE-2023: tool failed" in out
+    assert "MD-2023: 2 raw offenses, 0 with a missing id, 2 sampled, 0 problems" in out

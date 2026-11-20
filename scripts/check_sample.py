@@ -139,6 +139,12 @@ def main(names: list[str]) -> None:
             # Older years cover fewer states; the web build skips these too.
             print(f"{name}: skipped, {error}")
             continue
+        except ValueError as error:
+            # The tool refused the file, e.g. every offense points to a missing id;
+            # report it and go on, so later state-years still get checked.
+            print(f"{name}: tool failed, {error}")
+            failed = True
+            continue
         print(
             f"{name}: {result['total']:,} raw offenses, {result['dangling']:,} with a "
             f"missing id, {result['sampled']} sampled, {len(result['problems'])} problems"

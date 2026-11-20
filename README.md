@@ -64,7 +64,7 @@ Blank means the FBI file has no value: society as a victim has no age, and some 
 - Names follow each year's FBI table, so some change over time: location `13` is `Highway/Road/Ally` in 2005 and `Highway/Road/Alley/Street/Sidewalk` in 2023. Group stacked years by `offense_code` and `location_code`.
 - `agency_name` adds the FBI unit, so campuses stay apart (`University of Texas: Austin`), and county agencies end in `County`, so Austin police (`Austin`) and the Austin County sheriff (`Austin County`) do too.
 - Offenses whose agency is missing from the FBI agencies table are kept with blank agency fields (45 incidents in Texas 2023).
-- An offense that points to a missing incident, offense type or location is skipped, and the run prints how many. If every offense is skipped, or the table has none, the run fails and keeps the old output file; the web page leaves that state-year out, as it does for a year the FBI has no file for.
+- An offense that points to a missing incident, offense type or location is skipped, and the run prints how many. If every offense is skipped, or the table has none, the run fails and keeps the old output file. On the web page an empty table leaves that state-year out, as a missing FBI file does, and an all-skipped one fails that year's build so its old files stay up.
 
 ## Checked against the FBI files
 
