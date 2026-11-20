@@ -104,6 +104,7 @@ def offenses(zip_path: Path) -> Generator[Offense]:
     skipped = 0
     written = 0
     first_skip = ""
+    skips_in_error = False  # the all-skipped error already names the first skip
     try:
         state, by_id = incidents(zip_path)
         locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
@@ -147,20 +148,21 @@ def offenses(zip_path: Path) -> Generator[Offense]:
         # Zero rows is never a real state-year, so fail and keep the old output.
         if not written and skipped:
             # Every row dangling means the FBI changed its codes.
+            skips_in_error = True
             raise ValueError(
                 f"{zip_path.name}: every offense points to a missing id, first: {first_skip}"
             )
         if not written:
-            raise ValueError(f"{zip_path.name} has no offenses")
+            # Like an empty agencies table: no data, so the web build skips it.
+            raise NoFileError(f"{zip_path.name} has no offenses")
     except KeyError as error:
         # An FBI layout change must fail loudly, not turn every row into a skip.
         raise ValueError(
             f"{zip_path.name}: a table read for offenses has no column {error}"
         ) from error
     finally:
-        # Also runs when the writer stops early, so skipped rows are never silent.
-        # When nothing was written the error above already names the first skip.
-        if skipped and written:
+        # Also runs on an early stop or a broken read, so skipped rows are never silent.
+        if skipped and not skips_in_error:
             print(
                 f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
                 file=sys.stderr,

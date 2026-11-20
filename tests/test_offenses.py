@@ -1,8 +1,14 @@
+import importlib
+
 import pytest
 from conftest import TABLES_2023, build_zip
 
+from nibrs_tables.download import NoFileError
 from nibrs_tables.offenses import agency_label, iso_date, offenses
 from nibrs_tables.schema import Offense
+
+# The package re-exports the offenses() function under the module name.
+offenses_module = importlib.import_module("nibrs_tables.offenses")
 
 
 def test_iso_date_reads_both_layouts():
@@ -203,3 +209,35 @@ def test_agency_label_keeps_agencies_apart(agency, label):
 def test_location_code_rides_with_the_name(zip_2023):
     first = next(offenses(zip_2023))
     assert (first.location_code, first.location) == ("20", "Residence/Home")
+
+
+def test_empty_offense_table_is_a_no_file_error(tmp_path):
+    # build_web_data.py skips NoFileError per state-year instead of failing the year.
+    header = TABLES_2023["NIBRS_OFFENSE"].split("\n", 1)[0] + "\n"
+    path = build_zip(
+        tmp_path / "DE-2023.zip", "DE", {**TABLES_2023, "NIBRS_OFFENSE": header}
+    )
+    with pytest.raises(NoFileError, match="has no offenses"):
+        list(offenses(path))
+
+
+def test_skip_count_is_printed_when_reading_breaks(zip_2023, monkeypatch, capsys):
+    real = offenses_module.read_table
+
+    def breaks_after_a_dangling_row(path, table):
+        if table != "NIBRS_OFFENSE":
+            yield from real(path, table)
+            return
+        yield {
+            "offense_id": "22",
+            "incident_id": "1",
+            "offense_code": "99Z",
+            "attempt_complete_flag": "C",
+            "location_id": "35",
+        }
+        raise OSError("zip stream broke")
+
+    monkeypatch.setattr(offenses_module, "read_table", breaks_after_a_dangling_row)
+    with pytest.raises(OSError, match="zip stream broke"):
+        list(offenses(zip_2023))
+    assert "skipped 1 offenses" in capsys.readouterr().err
