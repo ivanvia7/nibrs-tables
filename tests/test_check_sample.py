@@ -93,7 +93,7 @@ def test_a_refused_file_fails_but_later_files_are_checked(
         check_sample.main(["DE-2023", "MD-2023"])
     assert stop.value.code == 1
     out = capsys.readouterr().out
-    assert "DE-2023: tool failed" in out
+    assert "DE-2023: check failed" in out
     assert "MD-2023: 2 raw offenses, 0 with a missing id, 2 sampled, 0 problems" in out
 
 
@@ -116,4 +116,33 @@ def test_a_bare_value_error_from_the_tool_is_a_tool_failure(
     with pytest.raises(SystemExit) as stop:
         check_sample.main(["DE-2023"])
     assert stop.value.code == 1
-    assert "DE-2023: tool failed" in capsys.readouterr().out
+    assert "DE-2023: check failed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "tables",
+    [
+        {k: v for k, v in TABLES_2023.items() if k != "NIBRS_LOCATION_TYPE"},
+        {
+            **TABLES_2023,
+            "NIBRS_incident": TABLES_2023["NIBRS_incident"].replace(
+                "incident_id", "inc_id", 1
+            ),
+        },
+    ],
+    ids=["missing table", "renamed column"],
+)
+def test_a_broken_zip_fails_but_later_files_are_checked(
+    tmp_path, monkeypatch, capsys, tables
+):
+    zips = {
+        "DE": build_zip(tmp_path / "DE-2023.zip", "DE", tables),
+        "MD": build_zip(tmp_path / "MD-2023.zip", "DE", TABLES_2023),
+    }
+    monkeypatch.setattr(check_sample, "download_zip", lambda s, *_: zips[s])
+    with pytest.raises(SystemExit) as stop:
+        check_sample.main(["DE-2023", "MD-2023"])
+    assert stop.value.code == 1
+    out = capsys.readouterr().out
+    assert "DE-2023: check failed" in out
+    assert "MD-2023: 2 raw offenses" in out

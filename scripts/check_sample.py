@@ -33,9 +33,10 @@ OFFENSES = "nibrs_offense.csv"
 def raw_rows(zip_path: Path, table: str) -> Iterator[dict[str, str]]:
     """Stream one table with plain csv; TX holds 1.6 million offense rows."""
     with zipfile.ZipFile(zip_path) as archive:
-        name = next(
-            n for n in archive.namelist() if n.lower().rsplit("/", 1)[-1] == table
-        )
+        names = [n for n in archive.namelist() if n.lower().rsplit("/", 1)[-1] == table]
+        if not names:
+            raise ValueError(f"{zip_path.name} has no {table}")
+        name = names[0]
         with archive.open(name) as raw:
             text = io.TextIOWrapper(raw, encoding="utf-8-sig", errors="replace")
             reader = csv.DictReader(text)
@@ -144,10 +145,11 @@ def main(names: list[str]) -> None:
         except NoFileError as error:
             print(f"{name}: skipped, {error}")
             continue
-        except ValueError as error:
+        except (ValueError, KeyError) as error:
+            # KeyError: a renamed column in this script's own plain-csv join.
             # The tool refused the file, e.g. every offense points to a missing id;
             # report it and go on, so later state-years still get checked.
-            print(f"{name}: tool failed, {error}")
+            print(f"{name}: check failed, {error}")
             failed = True
             continue
         print(
