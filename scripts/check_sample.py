@@ -3,9 +3,10 @@
     uv run python scripts/check_sample.py DE-2005 DE-2016 DE-2023 TX-2023
 
 Per state-year it checks two things and exits 1 on any miss:
-- one row per offense: every raw NIBRS_OFFENSE row comes out exactly once;
-- a seeded sample of raw rows, decoded by hand from the zip's own code tables,
-  gives the same codes, names, location and attempted flag as the tool.
+- one row per offense: every raw NIBRS_OFFENSE row whose incident, type and
+  location exist comes out exactly once (the tool skips the rest by design);
+- a seeded sample of raw rows, decoded by hand from the zip's own tables, gives
+  the same ori, codes, names, location and attempted flag as the tool.
 The join here reads the zip with plain csv on purpose, so a bug in read.py or
 offenses.py cannot hide itself.
 """
@@ -24,6 +25,7 @@ from nibrs_tables.offenses import offenses
 
 SEED = 7
 SAMPLE = 20
+OFFENSES = "nibrs_offense.csv"
 
 
 def raw_rows(zip_path: Path, table: str) -> Iterator[dict[str, str]]:
@@ -34,48 +36,59 @@ def raw_rows(zip_path: Path, table: str) -> Iterator[dict[str, str]]:
         )
         with archive.open(name) as raw:
             text = io.TextIOWrapper(raw, encoding="utf-8-sig", errors="replace")
-            for row in csv.DictReader(text):
-                yield {key.lower(): value for key, value in row.items()}
+            reader = csv.DictReader(text)
+            # Lower-case the header, not each row: a long row adds a None key.
+            reader.fieldnames = [field.lower() for field in reader.fieldnames or []]
+            yield from reader
 
 
-def decode(row: dict[str, str], types: dict, places: dict, key: str) -> dict[str, str]:
-    """One raw offense row decoded by hand from the zip's own code tables."""
-    kind = types.get(row[key], {})
-    place = places.get(row["location_id"], {})
-    return {
-        "incident_id": row["incident_id"],
-        "offense_code": kind.get("offense_code", ""),
-        "offense_name": kind.get("offense_name", ""),
-        "offense_category": kind.get("offense_category_name", ""),
-        "crime_against": kind.get("crime_against", ""),
-        "attempted": str(row["attempt_complete_flag"] == "A"),
-        "location_code": place.get("location_code", ""),
-        "location": place.get("location_name", ""),
+def agency_rows(zip_path: Path) -> Iterator[dict[str, str]]:
+    """agencies.csv from 2016 on, cde_agencies.csv before."""
+    with zipfile.ZipFile(zip_path) as archive:
+        names = {n.lower().rsplit("/", 1)[-1] for n in archive.namelist()}
+    table = "agencies.csv" if "agencies.csv" in names else "cde_agencies.csv"
+    yield from raw_rows(zip_path, table)
+
+
+def check(zip_path: Path, sample: int = SAMPLE, seed: int = SEED) -> dict:
+    """Counts and the problems found, one line each."""
+    oris = {row["agency_id"]: row["ori"] for row in agency_rows(zip_path)}
+    incident_agency = {
+        row["incident_id"]: row["agency_id"]
+        for row in raw_rows(zip_path, "nibrs_incident.csv")
     }
-
-
-def check(
-    zip_path: Path, sample: int = SAMPLE, seed: int = SEED
-) -> tuple[int, list[str]]:
-    """Raw offense count and the problems found, one line each."""
-    table = "nibrs_offense.csv"
-    total = sum(1 for _ in raw_rows(zip_path, table))
-    chosen = set(random.Random(seed).sample(range(total), min(sample, total)))
-
-    types_rows = list(raw_rows(zip_path, "nibrs_offense_type.csv"))
+    first = next(raw_rows(zip_path, OFFENSES), {})
     # Before 2023 an offense names its type by offense_type_id, from 2023 by code.
-    first = next(raw_rows(zip_path, table), {})
     key = "offense_type_id" if "offense_type_id" in first else "offense_code"
-    types = {row[key]: row for row in types_rows}
+    types = {row[key]: row for row in raw_rows(zip_path, "nibrs_offense_type.csv")}
     places = {
         row["location_id"]: row for row in raw_rows(zip_path, "nibrs_location_type.csv")
     }
+
+    total = sum(1 for _ in raw_rows(zip_path, OFFENSES))
+    chosen = set(random.Random(seed).sample(range(total), min(sample, total)))
     raw_ids: Counter[str] = Counter()
+    dangling = 0
     picked = {}
-    for index, row in enumerate(raw_rows(zip_path, table)):
+    for index, row in enumerate(raw_rows(zip_path, OFFENSES)):
+        kind = types.get(row[key])
+        place = places.get(row["location_id"])
+        if row["incident_id"] not in incident_agency or kind is None or place is None:
+            dangling += 1
+            continue
         raw_ids[row["offense_id"]] += 1
         if index in chosen:
-            picked[row["offense_id"]] = decode(row, types, places, key)
+            picked[row["offense_id"]] = {
+                "incident_id": row["incident_id"],
+                "ori": oris.get(incident_agency[row["incident_id"]], ""),
+                "offense_code": kind["offense_code"],
+                "offense_name": kind["offense_name"],
+                "offense_category": kind["offense_category_name"],
+                "crime_against": kind["crime_against"],
+                "attempted": str(row["attempt_complete_flag"] == "A"),
+                "location_code": place["location_code"],
+                "location": place["location_name"],
+            }
 
     seen: Counter[str] = Counter()
     problems = []
@@ -94,7 +107,12 @@ def check(
         problems.append(f"rows: {missing:,} raw offenses missing, {extra:,} extra")
     unchecked = picked.keys() - seen.keys()
     problems += [f"offense {oid} sampled but not in the output" for oid in unchecked]
-    return total, problems
+    return {
+        "total": total,
+        "dangling": dangling,
+        "sampled": len(picked),
+        "problems": problems,
+    }
 
 
 def main(names: list[str]) -> None:
@@ -102,18 +120,18 @@ def main(names: list[str]) -> None:
     for name in names:
         state, year = name.upper().split("-")
         try:
-            rows, problems = check(download_zip(state, int(year), CACHE_DIR))
+            result = check(download_zip(state, int(year), CACHE_DIR))
         except NoFileError as error:
             # Older years cover fewer states; the web build skips these too.
             print(f"{name}: skipped, {error}")
             continue
         print(
-            f"{name}: {rows:,} raw offenses, {min(SAMPLE, rows)} sampled, "
-            f"{len(problems)} problems"
+            f"{name}: {result['total']:,} raw offenses, {result['dangling']:,} with a "
+            f"missing id, {result['sampled']} sampled, {len(result['problems'])} problems"
         )
-        for problem in problems:
+        for problem in result["problems"]:
             print(f"  {problem}")
-        failed = failed or bool(problems)
+        failed = failed or bool(result["problems"])
     if failed:
         raise SystemExit(1)
 

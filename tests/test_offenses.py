@@ -199,6 +199,13 @@ def test_empty_offense_table_fails_and_keeps_old_output(tmp_path, run_cli):
             {"pub_agency_name": "Harris County", "agency_type_name": "County"},
             "Harris County",
         ),
+        (
+            {
+                "pub_agency_name": "New Castle County Police Department",
+                "agency_type_name": "County",
+            },
+            "New Castle County Police Department",
+        ),
         ({}, ""),  # agency missing from the FBI table
     ],
 )

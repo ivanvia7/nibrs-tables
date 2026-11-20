@@ -61,7 +61,8 @@ def agency_label(agency: dict[str, str]) -> str:
     unit = agency.get("pub_agency_unit", "").strip()
     if unit:
         return f"{name} {unit}"
-    if agency.get("agency_type_name") == "County" and not name.endswith("County"):
+    # "New Castle County Police Department" already says County.
+    if agency.get("agency_type_name") == "County" and "County" not in name.split():
         return f"{name} County"
     return name
 

@@ -72,13 +72,13 @@ Blank means the FBI file has no value: society as a victim has no age, and some 
 
 ```
 $ uv run python scripts/check_sample.py DE-2005 DE-2016 DE-2023 TX-2023
-DE-2005: 89,182 raw offenses, 20 sampled, 0 problems
-DE-2016: 79,533 raw offenses, 20 sampled, 0 problems
-DE-2023: 62,938 raw offenses, 20 sampled, 0 problems
-TX-2023: 1,643,107 raw offenses, 20 sampled, 0 problems
+DE-2005: 89,182 raw offenses, 0 with a missing id, 20 sampled, 0 problems
+DE-2016: 79,533 raw offenses, 0 with a missing id, 20 sampled, 0 problems
+DE-2023: 62,938 raw offenses, 0 with a missing id, 20 sampled, 0 problems
+TX-2023: 1,643,107 raw offenses, 0 with a missing id, 20 sampled, 0 problems
 ```
 
-Every raw offense row comes out exactly once, and each sampled row matches on code, name, category, location and the attempted flag.
+Every raw offense row with a known incident, type and location comes out exactly once, and each sampled row matches on agency id, code, name, category, location and the attempted flag.
 
 ## Web page
 
