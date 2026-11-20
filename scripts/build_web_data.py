@@ -24,7 +24,7 @@ FILES_JSON = WEB_DATA / "files.json"
 # That half is what lets every year fit under the 1 GB GitHub Pages limit.
 WEB_COPY = """
 COPY (
-    SELECT * EXCLUDE (state, year, offense_id)
+    SELECT * EXCLUDE (state, year, offense_id, location_code)
         REPLACE (incident_id::BIGINT AS incident_id)
     FROM read_parquet({src})
     ORDER BY incident_id

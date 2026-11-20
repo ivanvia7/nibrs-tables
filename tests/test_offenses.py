@@ -1,7 +1,7 @@
 import pytest
 from conftest import TABLES_2023, build_zip
 
-from nibrs_tables.offenses import iso_date, offenses
+from nibrs_tables.offenses import agency_label, iso_date, offenses
 from nibrs_tables.schema import Offense
 
 
@@ -39,6 +39,7 @@ def test_2016_layout_joins_by_offense_type_id(zip_2016):
             offense_category="Larceny/Theft Offenses",
             crime_against="Property",
             attempted=True,
+            location_code="08",
             location="Department/Discount Store",
         )
     ]
@@ -173,3 +174,32 @@ def test_empty_offense_table_fails_and_keeps_old_output(tmp_path, run_cli):
     )
     assert code == "DE-2023.zip has no offenses"
     assert out.read_text() == "old\n"
+
+
+@pytest.mark.parametrize(
+    ("agency", "label"),
+    [
+        # Real TX 2023 rows: two campuses share the name, their unit tells them apart.
+        (
+            {
+                "pub_agency_name": "University of Texas:",
+                "pub_agency_unit": "San Antonio",
+            },
+            "University of Texas: San Antonio",
+        ),
+        ({"pub_agency_name": "Austin", "agency_type_name": "City"}, "Austin"),
+        ({"pub_agency_name": "Austin", "agency_type_name": "County"}, "Austin County"),
+        (
+            {"pub_agency_name": "Harris County", "agency_type_name": "County"},
+            "Harris County",
+        ),
+        ({}, ""),  # agency missing from the FBI table
+    ],
+)
+def test_agency_label_keeps_agencies_apart(agency, label):
+    assert agency_label(agency) == label
+
+
+def test_location_code_rides_with_the_name(zip_2023):
+    first = next(offenses(zip_2023))
+    assert (first.location_code, first.location) == ("20", "Residence/Home")

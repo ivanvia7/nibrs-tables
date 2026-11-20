@@ -51,6 +51,21 @@ def agency_table(zip_path: Path) -> dict[str, dict[str, str]]:
         }
 
 
+def agency_label(agency: dict[str, str]) -> str:
+    """The FBI name plus its unit, so "University of Texas:" campuses stay apart.
+
+    A county sheriff shares its name with the city (Austin police and Austin County
+    sheriff are both "Austin"), so county agencies get " County" added.
+    """
+    name = agency.get("pub_agency_name", "").strip()
+    unit = agency.get("pub_agency_unit", "").strip()
+    if unit:
+        return f"{name} {unit}"
+    if agency.get("agency_type_name") == "County" and not name.endswith("County"):
+        return f"{name} County"
+    return name
+
+
 def incidents(zip_path: Path) -> tuple[str, dict[str, Incident]]:
     """The zip's state, and every incident by id with its date and agency."""
     # Codes mean different things in different years, so each zip uses its own tables.
@@ -68,7 +83,7 @@ def incidents(zip_path: Path) -> tuple[str, dict[str, Incident]]:
             date=iso_date(row["incident_date"]),
             hour=row["incident_hour"],
             ori=agency.get("ori", ""),
-            agency_name=agency.get("pub_agency_name", ""),
+            agency_name=agency_label(agency),
             county=agency.get("county_name", ""),
         )
     return state, by_id
@@ -126,6 +141,7 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 offense_category=offense_type["offense_category_name"],
                 crime_against=offense_type["crime_against"],
                 attempted=row["attempt_complete_flag"] == "A",
+                location_code=locations[row["location_id"]]["location_code"],
                 location=locations[row["location_id"]]["location_name"],
             )
         # Zero rows is never a real state-year, so fail and keep the old output.
