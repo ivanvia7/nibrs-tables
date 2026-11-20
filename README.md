@@ -16,7 +16,7 @@ tx-2023.parquet 1,643,107 rows
 
 That run took 47 seconds with the download and peaked at 1.6 GB of memory. Top Texas offenses in 2023: Simple Assault 249,745, All Other Larceny 173,999, Destruction/Damage/Vandalism of Property 167,598.
 
-The FBI download API drops connections under heavy parallel use; the tool retries 4 times, and a cached zip skips the download.
+The FBI download API drops connections under heavy parallel use; the tool tries 4 times, and a cached zip skips the download.
 
 ## Install
 

@@ -1,5 +1,5 @@
 import sys
-from collections.abc import Iterator
+from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -84,7 +84,7 @@ def offense_types(zip_path: Path) -> tuple[str, dict[str, dict[str, str]]]:
     return link, {row[link]: row for row in rows}
 
 
-def offenses(zip_path: Path) -> Iterator[Offense]:
+def offenses(zip_path: Path) -> Generator[Offense]:
     state, by_id = incidents(zip_path)
     locations = lookup(zip_path, "NIBRS_LOCATION_TYPE", "location_id")
     link, types = offense_types(zip_path)
@@ -92,37 +92,50 @@ def offenses(zip_path: Path) -> Iterator[Offense]:
     # One bad row must not stop a 1.6 million row file: skip it and say how many.
     skipped = 0
     first_skip = ""
-    for row in read_table(zip_path, "NIBRS_OFFENSE"):
-        try:
+    try:
+        for row in read_table(zip_path, "NIBRS_OFFENSE"):
+            # .get on the lookups, so a KeyError below can only be a missing column.
+            ids = {
+                "incident_id": by_id.get(row["incident_id"]),
+                link: types.get(row[link]),
+                "location_id": locations.get(row["location_id"]),
+            }
+            missing = [column for column, found in ids.items() if found is None]
+            if missing:
+                skipped += 1
+                column = missing[0]
+                first_skip = first_skip or (
+                    f"offense {row['offense_id']} points to missing {column} {row[column]!r}"
+                )
+                continue
             incident = by_id[row["incident_id"]]
             offense_type = types[row[link]]
-            location = locations[row["location_id"]]["location_name"]
-        except KeyError as error:
-            skipped += 1
-            first_skip = (
-                first_skip
-                or f"offense {row['offense_id']} points to missing id {error}"
+            yield Offense(
+                state=state,
+                year=row_year(row, incident.date),
+                incident_id=row["incident_id"],
+                offense_id=row["offense_id"],
+                incident_date=incident.date,
+                incident_hour=incident.hour,
+                ori=incident.ori,
+                agency_name=incident.agency_name,
+                county=incident.county,
+                offense_code=offense_type["offense_code"],
+                offense_name=offense_type["offense_name"],
+                offense_category=offense_type["offense_category_name"],
+                crime_against=offense_type["crime_against"],
+                attempted=row["attempt_complete_flag"] == "A",
+                location=locations[row["location_id"]]["location_name"],
             )
-            continue
-        yield Offense(
-            state=state,
-            year=row_year(row, incident.date),
-            incident_id=row["incident_id"],
-            offense_id=row["offense_id"],
-            incident_date=incident.date,
-            incident_hour=incident.hour,
-            ori=incident.ori,
-            agency_name=incident.agency_name,
-            county=incident.county,
-            offense_code=offense_type["offense_code"],
-            offense_name=offense_type["offense_name"],
-            offense_category=offense_type["offense_category_name"],
-            crime_against=offense_type["crime_against"],
-            attempted=row["attempt_complete_flag"] == "A",
-            location=location,
-        )
-    if skipped:
-        print(
-            f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
-            file=sys.stderr,
-        )
+    except KeyError as error:
+        # An FBI layout change must fail loudly, not turn every row into a skip.
+        raise ValueError(
+            f"{zip_path.name}: offense table has no column {error}"
+        ) from error
+    finally:
+        # Also runs when the writer stops early, so skipped rows are never silent.
+        if skipped:
+            print(
+                f"{zip_path.name}: skipped {skipped:,} offenses with a missing id, first: {first_skip}",
+                file=sys.stderr,
+            )

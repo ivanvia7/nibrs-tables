@@ -65,19 +65,47 @@ def test_unknown_agency_keeps_the_offense_with_blank_agency(zip_2023):
     assert second.offense_name == "Simple Assault"
 
 
-def test_dangling_offense_type_is_skipped_and_counted(tmp_path, capsys):
+def test_dangling_ids_are_skipped_and_counted(tmp_path, capsys):
     tables = {
         **TABLES_2023,
-        "NIBRS_OFFENSE": TABLES_2023["NIBRS_OFFENSE"] + "2023,22,1,99Z,C,35\n",
+        "NIBRS_OFFENSE": TABLES_2023["NIBRS_OFFENSE"]
+        + "2023,22,1,99Z,C,35\n"  # offense type missing
+        + "2023,23,999,13B,C,35\n"  # incident missing
+        + "2023,24,1,13B,C,999\n",  # location missing
     }
     path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
     good = list(offenses(build_zip(tmp_path / "good.zip", "DE", TABLES_2023)))
-    rows = list(offenses(path))
-    assert rows == good
+    assert list(offenses(path)) == good
     assert (
-        "skipped 1 offenses with a missing id, first: offense 22 points to missing id '99Z'"
-        in (capsys.readouterr().err)
-    )
+        "skipped 3 offenses with a missing id, first: "
+        "offense 22 points to missing offense_code '99Z'"
+    ) in capsys.readouterr().err
+
+
+def test_skip_count_is_printed_when_reading_stops_early(tmp_path, capsys):
+    tables = {
+        **TABLES_2023,
+        "NIBRS_OFFENSE": "data_year,offense_id,incident_id,offense_code,"
+        "attempt_complete_flag,location_id\n"
+        "2023,22,1,99Z,C,35\n"
+        "2023,20,1,13B,C,35\n"
+        "2023,21,2,13B,C,35\n",
+    }
+    rows = offenses(build_zip(tmp_path / "DE-2023.zip", "DE", tables))
+    next(rows)
+    rows.close()
+    assert "skipped 1 offenses" in capsys.readouterr().err
+
+
+def test_missing_column_fails_loudly(tmp_path):
+    tables = {
+        **TABLES_2023,
+        "NIBRS_OFFENSE": "data_year,offense_id,incident_id,offense_code,"
+        "attempt_complete_flag\n2023,20,1,13B,C\n",
+    }
+    path = build_zip(tmp_path / "DE-2023.zip", "DE", tables)
+    with pytest.raises(ValueError, match="offense table has no column 'location_id'"):
+        list(offenses(path))
 
 
 def test_empty_agencies_raises_clean_error(tmp_path):
