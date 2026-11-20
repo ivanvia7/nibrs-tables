@@ -100,3 +100,20 @@ def test_a_refused_file_fails_but_later_files_are_checked(
 def test_a_bad_name_is_not_called_a_tool_failure():
     with pytest.raises(ValueError, match="invalid literal"):
         check_sample.main(["DE-20x3"])
+
+
+def test_a_bare_value_error_from_the_tool_is_a_tool_failure(
+    tmp_path, monkeypatch, capsys
+):
+    # A bad date cell raises a strptime ValueError with no zip name in it.
+    path = build_zip(tmp_path / "DE-2023.zip", "DE", TABLES_2023)
+    monkeypatch.setattr(check_sample, "download_zip", lambda *_: path)
+
+    def bad_cell(_):
+        raise ValueError("time data '31-FOO-16' does not match format")
+
+    monkeypatch.setattr(check_sample, "check", bad_cell)
+    with pytest.raises(SystemExit) as stop:
+        check_sample.main(["DE-2023"])
+    assert stop.value.code == 1
+    assert "DE-2023: tool failed" in capsys.readouterr().out
