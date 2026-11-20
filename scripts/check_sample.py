@@ -4,7 +4,8 @@
 
 Per state-year it checks two things and exits 1 on any miss:
 - one row per offense: every raw NIBRS_OFFENSE row whose incident, type and
-  location exist comes out exactly once (the tool skips the rest by design);
+  location exist comes out exactly once (the tool skips the rest by design,
+  and more than 1% of such rows fails the check);
 - a seeded sample of raw rows, decoded by hand from the zip's own tables, gives
   the same ori, codes, names, location and attempted flag as the tool.
 The join here reads the zip with plain csv on purpose, so a bug in read.py or
@@ -25,6 +26,7 @@ from nibrs_tables.offenses import offenses
 
 SEED = 7
 SAMPLE = 20
+MAX_DANGLING = 0.01  # share of rows with a missing id before the year fails
 OFFENSES = "nibrs_offense.csv"
 
 
@@ -65,30 +67,39 @@ def check(zip_path: Path, sample: int = SAMPLE, seed: int = SEED) -> dict:
         row["location_id"]: row for row in raw_rows(zip_path, "nibrs_location_type.csv")
     }
 
-    total = sum(1 for _ in raw_rows(zip_path, OFFENSES))
-    chosen = set(random.Random(seed).sample(range(total), min(sample, total)))
+    # Reservoir sample over the rows the tool keeps, so every pick gets compared.
+    rng = random.Random(seed)
     raw_ids: Counter[str] = Counter()
-    dangling = 0
-    picked = {}
-    for index, row in enumerate(raw_rows(zip_path, OFFENSES)):
+    total = dangling = kept = 0
+    reservoir: list[tuple[str, dict[str, str]]] = []
+    for row in raw_rows(zip_path, OFFENSES):
+        total += 1
         kind = types.get(row[key])
         place = places.get(row["location_id"])
         if row["incident_id"] not in incident_agency or kind is None or place is None:
             dangling += 1
             continue
         raw_ids[row["offense_id"]] += 1
-        if index in chosen:
-            picked[row["offense_id"]] = {
-                "incident_id": row["incident_id"],
-                "ori": oris.get(incident_agency[row["incident_id"]], ""),
-                "offense_code": kind["offense_code"],
-                "offense_name": kind["offense_name"],
-                "offense_category": kind["offense_category_name"],
-                "crime_against": kind["crime_against"],
-                "attempted": str(row["attempt_complete_flag"] == "A"),
-                "location_code": place["location_code"],
-                "location": place["location_name"],
-            }
+        kept += 1
+        slot = len(reservoir) if len(reservoir) < sample else rng.randrange(kept)
+        if slot >= sample:
+            continue
+        decoded = {
+            "incident_id": row["incident_id"],
+            "ori": oris.get(incident_agency[row["incident_id"]], ""),
+            "offense_code": kind["offense_code"],
+            "offense_name": kind["offense_name"],
+            "offense_category": kind["offense_category_name"],
+            "crime_against": kind["crime_against"],
+            "attempted": str(row["attempt_complete_flag"] == "A"),
+            "location_code": place["location_code"],
+            "location": place["location_name"],
+        }
+        if slot == len(reservoir):
+            reservoir.append((row["offense_id"], decoded))
+        else:
+            reservoir[slot] = (row["offense_id"], decoded)
+    picked = dict(reservoir)
 
     seen: Counter[str] = Counter()
     problems = []
@@ -105,6 +116,9 @@ def check(zip_path: Path, sample: int = SAMPLE, seed: int = SEED) -> dict:
         missing = sum((raw_ids - seen).values())
         extra = sum((seen - raw_ids).values())
         problems.append(f"rows: {missing:,} raw offenses missing, {extra:,} extra")
+    # A few dangling rows are normal FBI noise; many mean the codes changed.
+    if dangling > total * MAX_DANGLING:
+        problems.append(f"rows: {dangling:,} of {total:,} point to a missing id")
     unchecked = picked.keys() - seen.keys()
     problems += [f"offense {oid} sampled but not in the output" for oid in unchecked]
     return {

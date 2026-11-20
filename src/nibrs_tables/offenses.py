@@ -146,7 +146,7 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 location_code=locations[row["location_id"]]["location_code"],
                 location=locations[row["location_id"]]["location_name"],
             )
-        # Zero rows is never a real state-year, so fail and keep the old output.
+        # Zero rows is never a real state-year: the CLI fails and keeps the old output.
         if not written and skipped:
             # Every row dangling means the FBI changed its codes.
             skips_in_error = True
@@ -154,7 +154,8 @@ def offenses(zip_path: Path) -> Generator[Offense]:
                 f"{zip_path.name}: every offense points to a missing id, first: {first_skip}"
             )
         if not written:
-            # Like an empty agencies table: no data, so the web build skips it.
+            # Like an empty agencies table: no data, so the web build leaves the
+            # state-year out of that year's files, as it does for a missing file.
             raise NoFileError(f"{zip_path.name} has no offenses")
     except KeyError as error:
         # An FBI layout change must fail loudly, not turn every row into a skip.
